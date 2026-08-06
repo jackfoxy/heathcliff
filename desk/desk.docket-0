@@ -1,0 +1,9 @@
+:~
+  title+'heathcliff'
+  info+'filesystem explorer'
+  color+0xe3.9871
+  version+[1 0 0]
+  website+'https://github.com/jackfoxy/heathcliff'
+  license+'MIT'
+  site+/heathcliff/view/our/base/now
+==
