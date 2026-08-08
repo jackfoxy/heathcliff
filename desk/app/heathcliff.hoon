@@ -419,7 +419,6 @@
   ++  fils  ?=(^ [fil:arch])  ::TODO  why are the [] needed?
   ++  have  &(fils live)      ::  a file whose data we can still read
   ++  gone  &(fils !live)     ::  a file whose data has been tombstoned
-  ++  peak  ?=(~ s.beam)
   ::
   ::  +live: whether this node's data is still in the store
   ::
@@ -436,18 +435,6 @@
           `path`[(scot %p our) %$ (scot %da now) %tomb ~]
         rend
     ==
-  ::
-  ++  free
-    %+  turn  (sort ~(tap in ~(key by dir:arch)) aor)
-    |=  k=@ta
-    ^-  [dir=? path]
-    =+  naf=(snoc s.beam k)
-    =+  arf=arch(s.beam naf)
-    ?^  fil.arf              [| /[k]]
-    ?.  ?=([^ ~ ~] dir.arf)  [& /[k]]
-    ::TODO  make tail recursive
-    =+  dep=$(s.beam naf, k p.n.dir.arf)
-    [-.dep k +.dep]
   ::
   :: ++  curb  ?+  -.r.beam  !!  ::TODO  as wrapper function
   ::             %ud  (gth p.r.beam ud:.^(cass:clay %cw rend(r.beam da+now)))
@@ -853,160 +840,515 @@
     =/  pay=simple-payload:http  (page(mode %view) `(crip msg))
     pay(status-code.response-header 400)
   ::
+  ::  +hive: every path in the desk, for the navigation tree
+  ::
+  ::    %ct is answered straight out of the yaki at the requested aeon, so it
+  ::    is safe on historical cases and comes back sorted.  paths are full
+  ::    desk paths regardless of where in the desk we ask.
+  ::
+  ++  hive  ~+  .^((list path) %ct rend(s.beam ~))
+  ::
   ::  page: renders file/directory content alongside metadata
   ::
   ::    page structure is roughly as follows:
-  ::    interactive beam
-  ::    directory navigator  ::TODO  should be desk-wide tree instead?
-  ::    if file: contents
-  ::    if file: metadata: last revision?, noun size, permissions
+  ::    header: brand, interactive beam
+  ::    tree pane: desk selector, up, desk-wide file tree
+  ::    workspace: notice, content or editor, metadata footer
   ::
   ++  page
     |=  msg=(unit @t)
     =/  edit=?  =(%edit mode)
+    ::  step: the mode the tree and listing links navigate in
+    ::
+    ::    a directory has no edit page, so links out of an editor go to the
+    ::    view of their target instead of a route that would 400.
+    ::
+    =/  step  ?:(edit %view mode)
     ^-  simple-payload:http
     :-  [200 ['content-type'^'text/html']~]
     |^  `(as-octt:mimes:html (en-xml:html full))
     ::
     ++  style
       '''
-      * { font-family: monospace; }
-      pre { margin: 0; }
-      a { text-decoration: none; color: #841; }
+      :root {
+        color-scheme: light dark;
+        --bg: #f7f7f4;
+        --surface: #ffffff;
+        --surface-alt: #f0f0eb;
+        --text: #181817;
+        --muted: #66665f;
+        --border: #d4d4cc;
+        --accent: #6d28d9;
+        --focus: #2563eb;
+        --warn: #a4530f;
+        --tree-width: 20rem;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        font-size: 15px;
+      }
 
-      header > div { display: inline-block; }
-      .control { float: right; }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #11110f;
+          --surface: #191917;
+          --surface-alt: #22221f;
+          --text: #f2f2ec;
+          --muted: #a7a79e;
+          --border: #3b3b35;
+          --accent: #8b5cf6;
+          --focus: #60a5fa;
+          --warn: #f0b45c;
+        }
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body { height: 100%; margin: 0; }
 
       body {
-        margin: 0;
-        padding: 0;
-        width: 100vw;
-        height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        overflow: hidden;
+      }
+
+      button, select, input, textarea { color: inherit; font: inherit; }
+
+      button, select {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 0.4rem;
+        cursor: pointer;
+        min-height: 2rem;
+        padding: 0.35rem 0.7rem;
+      }
+
+      button:hover:not(:disabled), select:hover {
+        border-color: var(--accent);
+      }
+
+      button:focus-visible, select:focus-visible, a:focus-visible,
+      textarea:focus-visible, input:focus-visible,
+      [role="separator"]:focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 2px;
+      }
+
+      a { color: inherit; text-decoration: none; }
+
+      pre { margin: 0; }
+
+      .sr-only {
+        clip-path: inset(50%);
+        height: 1px;
+        overflow: hidden;
+        position: absolute;
+        white-space: nowrap;
+        width: 1px;
+      }
+
+      .app-shell {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        height: 100%;
+      }
+
+      .app-header {
+        align-items: center;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
         display: flex;
-        flex-direction: column;
+        gap: 1rem;
+        min-height: 3.25rem;
+        padding: 0.6rem 1rem;
       }
 
-      header, footer {
-        margin: 0.5em 1.2em;
-        padding: 0;
+      .brand {
+        border-radius: 0.3rem;
+        font-size: 1.05rem;
+        font-weight: 700;
+        padding: 0.15rem 0.3rem;
       }
 
-      header a {
-        font-size: 1.5em;
+      .brand:hover { background: var(--surface-alt); }
+
+      .beam {
+        color: var(--muted);
+        display: flex;
+        font-family: ui-monospace, monospace;
+        font-size: 0.85rem;
+        gap: 0.35rem;
+        min-width: 0;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+
+      .beam-path { color: var(--text); }
+
+      .workbench {
+        display: grid;
+        grid-template-columns:
+          minmax(9rem, var(--tree-width)) 0.35rem minmax(0, 1fr);
+        min-height: 0;
+      }
+
+      .tree-pane {
+        background: var(--surface);
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        min-height: 0;
+        min-width: 0;
+      }
+
+      .pane-header {
+        align-items: center;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        gap: 0.5rem;
+        justify-content: space-between;
+        min-height: 3rem;
+        padding: 0.45rem 0.7rem;
+      }
+
+      .pane-header h2 {
+        font-family: ui-monospace, monospace;
+        font-size: 0.9rem;
+        margin: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .up {
+        align-items: center;
+        border: 1px solid var(--border);
+        border-radius: 0.4rem;
+        display: inline-flex;
+        height: 1.9rem;
+        justify-content: center;
+        width: 1.9rem;
+      }
+
+      .up:hover { border-color: var(--accent); }
+
+      .file-tree {
+        font-family: ui-monospace, monospace;
+        font-size: 0.85rem;
+        overflow: auto;
+        padding: 0.5rem;
+      }
+
+      .tree-link {
+        border-radius: 0.25rem;
+        display: inline-block;
+        max-width: 100%;
+        overflow: hidden;
+        padding: 0.1rem 0.3rem;
+        text-overflow: ellipsis;
         vertical-align: middle;
+        white-space: nowrap;
       }
 
-      section {
-        flex-basis: 0;
-        flex-grow: 1;
-        margin: 0 1em;
+      .tree-link:hover { background: var(--surface-alt); }
+
+      .tree-here {
+        background: var(--surface-alt);
+        color: var(--accent);
+        font-weight: 700;
       }
 
-      section, textarea {
-        overflow: scroll;
-        padding: 1em;
-        border: 1px solid grey;
-        border-radius: 3px;
+      .tree-dir-link { color: var(--muted); }
+
+      .tree-desk > summary > .tree-link {
+        color: var(--text);
+        font-weight: 700;
       }
 
-      section.body {
-        flex-grow: 3;
+      .tree-desk + .tree-desk { margin-top: 0.15rem; }
+
+      .tree-summary {
+        cursor: pointer;
+        list-style-position: outside;
+        padding-left: 0.2rem;
       }
 
-      section.edit {
-        padding: 0em;
-        border: none;
+      .tree-summary::marker { color: var(--muted); }
+
+      .tree-kids {
+        border-left: 1px solid var(--border);
+        margin-left: 0.5rem;
+        padding-left: 0.35rem;
       }
 
-      section.edit form {
-        height: 100%;
-        width: 100%;
-        margin: 0;
+      .splitter {
+        background: var(--border);
+        cursor: col-resize;
+        touch-action: none;
+      }
+
+      .splitter:hover, .splitter:focus { background: var(--accent); }
+
+      .workspace {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        min-height: 0;
+        min-width: 0;
+      }
+
+      .note {
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        border-left: 0.3rem solid var(--warn);
+        color: var(--warn);
+        padding: 0.6rem 0.9rem;
+      }
+
+      .pane {
+        background: var(--surface);
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        min-height: 0;
+        min-width: 0;
+      }
+
+      .pane-body {
         display: flex;
         flex-direction: column;
+        min-height: 0;
+        overflow: auto;
+        padding: 0.9rem;
       }
 
-      section.edit .container {
-        flex-basis: 0;
-        flex-grow: 1;
+      .pane.editing .pane-body { overflow: hidden; padding: 0; }
+
+      .pane-actions {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
       }
 
-      section.edit textarea {
+      .action {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 0.4rem;
+        font-size: 0.85rem;
+        padding: 0.3rem 0.65rem;
+      }
+
+      .action:hover { border-color: var(--accent); }
+
+      .upload {
+        align-items: center;
+        display: flex;
+        gap: 0.4rem;
+        margin: 0;
+      }
+
+      .upload label {
+        align-items: center;
+        color: var(--muted);
+        display: flex;
+        font-size: 0.78rem;
+        gap: 0.25rem;
+      }
+
+      .upload input[type="file"] {
+        font-size: 0.78rem;
+        max-width: 13rem;
+      }
+
+      .view pre {
+        font: 0.85rem/1.5 ui-monospace, monospace;
+      }
+
+      .fail {
+        color: var(--warn);
+        font-family: ui-monospace, monospace;
+        font-size: 0.85rem;
+      }
+
+      .empty {
+        color: var(--muted);
+        font-size: 0.85rem;
+        margin: 0;
+      }
+
+      .editor {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        margin: 0;
+        min-height: 0;
+      }
+
+      .editor-area {
+        background: var(--surface);
+        border: 0;
+        color: var(--text);
+        flex: 1;
+        font: 0.9rem/1.55 ui-monospace, monospace;
+        min-height: 0;
+        outline-offset: -2px;
+        padding: 0.9rem;
+        resize: none;
+        tab-size: 2;
         width: 100%;
-        height: 100%;
       }
 
-      section.edit button {
-        margin: 0.5em;
+      .editor-actions {
+        border-top: 1px solid var(--border);
+        display: flex;
+        gap: 0.5rem;
+        padding: 0.5rem 0.7rem;
       }
 
-      form.upload {
-        display: inline;
-        margin-left: 1em;
+      .perm { font-size: 0.9rem; }
+
+      .perm h3 {
+        font-size: 0.9rem;
+        margin: 0 0 0.3rem 0;
       }
 
-      form.upload label {
-        font-size: 0.8em;
+      .perm .rule, .perm .sown, .perm .crews {
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 1.2rem;
+        padding-bottom: 1.2rem;
       }
 
-      section.perm h3 {
-        margin: 0 0 0.2em 0;
-        font-size: 1em;
+      .perm .gist {
+        font-size: 1.05rem;
+        margin: 0 0 0.2rem 0;
       }
 
-      section.perm .rule, section.perm .sown {
-        margin-bottom: 1.5em;
+      .perm .from, .status-bar .from { color: var(--muted); }
+
+      .perm .warn { color: var(--warn); }
+
+      .perm ul.who {
+        margin: 0.3rem 0;
+        padding-left: 1.4rem;
       }
 
-      section.perm .gist {
-        font-size: 1.2em;
+      .perm form {
+        align-items: flex-start;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin: 0.6rem 0;
       }
 
-      section.perm .from, footer .from {
-        color: grey;
+      .perm label {
+        color: var(--muted);
+        display: grid;
+        font-size: 0.78rem;
+        gap: 0.2rem;
+        max-width: 30rem;
+        width: 100%;
       }
 
-      section.perm .warn {
-        color: #841;
+      .perm textarea, .perm input, .perm select {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 0.3rem;
+        color: var(--text);
+        font: 0.85rem/1.45 ui-monospace, monospace;
+        padding: 0.35rem 0.5rem;
+        width: 100%;
       }
 
-      section.perm ul.who {
-        margin: 0.3em 0;
-        padding-left: 1.5em;
-      }
-
-      section.perm table {
+      .perm table {
         border-collapse: collapse;
+        font-size: 0.85rem;
       }
 
-      section.perm th, section.perm td {
+      .perm th, .perm td {
+        padding: 0.15rem 1.4rem 0.15rem 0;
         text-align: left;
-        padding: 0.1em 1.5em 0.1em 0;
       }
 
-      section.perm th {
-        color: grey;
+      .perm th {
+        color: var(--muted);
         font-weight: normal;
       }
 
-      section.note {
-        flex-grow: 0;
-        flex-basis: auto;
-        color: #841;
-        border-color: #841;
+      .status-bar {
+        align-items: center;
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        display: flex;
+        flex-wrap: wrap;
+        font-size: 0.8rem;
+        gap: 0.9rem;
+        padding: 0.45rem 0.9rem;
       }
 
-      section.directory > a {
-        display: inline-block;
-        border: 1px solid grey;
-        border-radius: 2px;
-        padding: 1em;
-        margin: 0.5em;
+      .status-bar a {
+        border-radius: 0.25rem;
+        padding: 0.1rem 0.3rem;
       }
 
-      footer {
-        color: grey;
+      .status-bar a:hover {
+        background: var(--surface-alt);
+        color: var(--text);
       }
+
+      @media (max-width: 760px) {
+        .workbench {
+          grid-template-columns: minmax(0, 1fr);
+          grid-template-rows: minmax(7rem, 26vh) 0.35rem minmax(18rem, 1fr);
+        }
+
+        .splitter { cursor: row-resize; }
+      }
+      '''
+    ::
+    ::  +script: pane resizing, and keeping the open file in view
+    ::
+    ++  script
+      '''
+      (() => {
+        'use strict';
+        const store = 'heathcliff.tree.width';
+        const root = document.documentElement;
+        const pane = document.getElementById('tree-pane');
+        const bar = document.getElementById('splitter');
+        const least = 140;
+        const apply = (px) => {
+          const wide = Math.min(Math.max(px, least), window.innerWidth - 240);
+          root.style.setProperty('--tree-width', wide + 'px');
+          try { localStorage.setItem(store, String(wide)); } catch (e) {}
+        };
+        let kept = NaN;
+        try { kept = parseInt(localStorage.getItem(store), 10); } catch (e) {}
+        if (kept > 0) apply(kept);
+        if (pane && bar) {
+          bar.addEventListener('pointerdown', (event) => {
+            bar.setPointerCapture(event.pointerId);
+            event.preventDefault();
+          });
+          bar.addEventListener('pointermove', (event) => {
+            if (!bar.hasPointerCapture(event.pointerId)) return;
+            apply(event.clientX - pane.getBoundingClientRect().left);
+          });
+          bar.addEventListener('pointerup', (event) => {
+            bar.releasePointerCapture(event.pointerId);
+          });
+          bar.addEventListener('keydown', (event) => {
+            const step = event.shiftKey ? 64 : 16;
+            const wide = pane.getBoundingClientRect().width;
+            if (event.key === 'ArrowLeft') {
+              apply(wide - step);
+              event.preventDefault();
+            }
+            if (event.key === 'ArrowRight') {
+              apply(wide + step);
+              event.preventDefault();
+            }
+          });
+        }
+        const here = document.querySelector('.tree-here');
+        if (here) here.scrollIntoView({ block: 'center' });
+      })();
       '''
     ::
     ++  full
@@ -1019,133 +1361,208 @@
           ;style:"{(trip style)}"
         ==
         ;body
-          ;+  site
-          ;+  dile
-          ;+  ?~  msg  :/""
-              ;section.note
-                ; {(trip u.msg)}
+          ;div.app-shell
+            ;+  site
+            ;main.workbench
+              ;+  navi
+              ;div#splitter.splitter
+                =role  "separator"
+                =tabindex  "0"
+                =aria-orientation  "vertical"
+                =aria-label  "resize the file tree"
+                ;span.sr-only:"resize the file tree"
               ==
-          ;+  body
-          ;+  meta
+              ;section.workspace
+                ;+  ?~  msg  :/""
+                    ;div.note:"{(trip u.msg)}"
+                ;+  body
+                ;+  meta
+              ==
+            ==
+          ==
+          ;script:"{(trip script)}"
         ==
       ==
     ::
-    ::TODO  intended behavior:
-    ::  - "up" navigation always available
-    ::  - dropdown selection for desk
-    ::  - input field for case
-    ::  - clickable parent path elements
-    ::  - gap
-    ::  - download, upload and edit buttons if mime-able
+    ::  +site: the app header, with the beam we are looking at
+    ::
     ++  site
       ^-  manx
-      ::
-      ;header
-        ;div.path
-          ; / {(scow %p p.beam)} /
-          ;select
-            =onchange  """
-                       window.location.href =
-                       '/{(trip dap)}/{(trip mode)}/our/'
-                       + this.value +
-                       '{(spud (slag 2 spot))}';
-                       """
-            ::NOTE  pinned to now: clay's empty-desk fast path only applies at
-            ::       [%da now], and off it this scry crashes the whole event.
-            ::       the desk list is a property of the ship, not of the
-            ::       revision being browsed, so now is also the correct case.
-            ;*  %+  turn
-                  =/  bem  rend(q.beam %$, r.beam da+now, s.beam ~)
-                  (sort ~(tap in .^((set desk) %cd bem)) aor)
-                |=  d=desk
-                =+  p=(trip d)
-                ?.  =(d q.beam)
-                  ;option(value p):"\%{p}"
-                ;option(selected "", value p):"\%{p}"
-          ==
-          ;
-          ; /
-          ; {?:(=(da+now r.beam) "now" (scow r.beam))}
-          ::TODO  how to make this work?
-          :: ;form
-          ::   =style  "display: inline; margin: 0; padding: 0;"
-          ::   =onsubmit  """
-          ::              console.log('aaabb') &&
-          ::              (e) => \{
-          ::                console.log('aaa', e);
-          ::                alert('hi');
-          ::                e.preventDefault(); window.location.href =
-          ::                {(spud (scag 2 spot))} +
-          ::                '/' + e.target.value + {(spud (slag 3 spot))};
-          ::              }
-          ::              """
-          ::   ;input(style "max-width: 80px;")
-          ::     =value  "{?:(=(da+now r.beam) "now" (scow r.beam))}";
-          :: ==
-          ;
-          ;*  %+  turn  (snip s.beam)
-              |=  n=@ta
-              ;span  ::TODO  ;a
-                ; / {(trip n)}
-              ==
-          ;+  ?~  s.beam  :/""
-              :/"/ {(trip (rear s.beam))}"
-        ==
-        ;
-        ;+  ?:  =(~ s.beam)  :/""
-            ;a/"{sput(s.beam (snip s.beam))}"(title "navigate up"):"↖️"
-        ;
-        ;div.control
-          ;+  ?.  have  :/""
-              ;a/"{sput(mode %down)}"
-                =id  "download"
-                =download  "{(join '.' (flop (scag 2 (flop s.beam))))}"
-                =title  "download this file"
-                ; ⬇️
-              ==
-          ;
-          ;+  ?:  edit
-                ;a/"{sput(mode %view)}"
-                  =id  "view"
-                  =title  "view this file"
-                  ; 📄
-                ==
-              ::  only the head of the desk is editable
-              ?.  =(da+now r.beam)  :/""
-              ;a/"{sput(mode %edit)}"
-                =id  "edit"
-                =title  "edit this file"
-                ; ✏️
-              ==
-          ::  upload, into directories at the head of the desk only
-          ;+  ?.  &(!fils =(da+now r.beam))  :/""
-              ;form.upload(method "post", enctype "multipart/form-data")
-                =action  sput(mode %load)
-                ;input(type "file", name "file", required "");
-                ;label(title "heathcliff carries the mark sources, and can commit the ones this desk lacks")
-                  ;input(type "checkbox", name "marks", value "1");
-                  ; install missing marks
-                ==
-                ;button(type "submit", title "upload into this directory"):"⬆️"
-              ==
+      ;header.app-header
+        ;a.brand(href "{sput(mode step, s.beam ~)}"):"heathcliff"
+        ;div.beam
+          ;span:"{(scow %p p.beam)}"
+          ;span:"/"
+          ;span:"\%{(trip q.beam)}"
+          ;span:"/"
+          ;span:"{?:(=(da+now r.beam) "now" (scow r.beam))}"
+          ;span.beam-path:"{?~(s.beam "/" (spud s.beam))}"
         ==
       ==
     ::
-    ++  dile
+    ::  +navi: the file tree pane, with the desk it is showing
+    ::
+    ++  navi
       ^-  manx
-      ?:  edit  :/""
-      ?~  [dir:arch]  :/""
-      ;section.directory
-        ;+  ?:  peak  :/""
-            ;a/"{sput(s.beam (snip s.beam))}"
-              ; ..
+      ;aside#tree-pane.tree-pane(aria-label "clay navigation")
+        ;div.pane-header
+          ;h2:"{(scow %p p.beam)}"
+          ;+  ?:  =(~ s.beam)  :/""
+              ;a.up
+                =href  "{sput(mode step, s.beam (snip s.beam))}"
+                =title  "navigate up"
+                ; ↖
+              ==
+        ==
+        ;div#file-tree.file-tree(role "tree", aria-label "clay contents")
+          ::NOTE  pinned to now: clay's empty-desk fast path only applies at
+          ::      [%da now], and off it this scry crashes the whole event.
+          ::      the desk list is a property of the ship, not of the revision
+          ::      being browsed, so now is also the correct case.
+          ;*  %+  turn
+                =/  bem  rend(q.beam %$, r.beam da+now, s.beam ~)
+                (sort ~(tap in .^((set desk) %cd bem)) aor)
+              dnod
+        ==
+      ==
+    ::
+    ::  +dnod: one desk, as the root of its own tree
+    ::
+    ::    only the desk being browsed carries the case we're browsing at.  a
+    ::    revision number means nothing on another desk, so the rest are read
+    ::    and linked at now.
+    ::
+    ++  dnod
+      |=  dek=desk
+      ^-  manx
+      =/  cur=?  =(dek q.beam)
+      =/  sub=(list path)
+        ?:  cur  hive
+        .^((list path) %ct rend(q.beam dek, r.beam da+now, s.beam ~))
+      =/  det=manx
+        ;details.tree-desk
+          ;summary.tree-summary
+            ;+  (item dek cur ~ "%{(trip dek)}" &)
+          ==
+          ;div.tree-kids
+            ;*  (limb dek cur ~ sub)
+          ==
+        ==
+      =?  a.g.det  cur  [[%open ""] a.g.det]
+      det
+    ::
+    ::  +limb: one level of a desk's tree, as tree items
+    ::
+    ::    a node whose only child is a leaf is a file with its mark hanging
+    ::    off it, so the two render as one entry.
+    ::
+    ++  limb
+      |=  [dek=desk cur=? pre=path sub=(list path)]
+      ^-  marl
+      =/  kid=(jar @ta path)
+        %+  roll  sub
+        |=  [p=path j=(jar @ta path)]
+        ?~  p  j
+        (~(add ja j) i.p t.p)
+      %+  turn  (sort ~(tap in ~(key by kid)) aor)
+      |=  nom=@ta
+      ^-  manx
+      =/  pax=path          (snoc pre nom)
+      =/  kits=(list path)  (~(get ja kid) nom)
+      ?:  ?=([~ ~] kits)
+        (item dek cur pax (trip nom) |)
+      ?:  ?=([[@ ~] ~] kits)
+        (item dek cur (snoc pax i.i.kits) "{(trip nom)}/{(trip i.i.kits)}" |)
+      =/  det=manx
+        ;details.tree-dir
+          ;summary.tree-summary
+            ;+  (item dek cur pax (trip nom) &)
+          ==
+          ;div.tree-kids
+            ;*  (limb dek cur pax kits)
+          ==
+        ==
+      ::  open the branches that lead to the node on screen
+      ::
+      =?  a.g.det  &(cur =(pax (scag (lent pax) s.beam)))
+        [[%open ""] a.g.det]
+      det
+    ::
+    ::  +item: one tree entry, marked when it is the node on screen
+    ::
+    ++  item
+      |=  [dek=desk cur=? pax=path nam=tape dir=?]
+      ^-  manx
+      =/  cls=tape
+        ;:  weld
+          "tree-link "
+          ?:(dir "tree-dir-link" "tree-file-link")
+          ?:(&(cur =(pax s.beam)) " tree-here" "")
+        ==
+      =/  loc=tape
+        ?:  cur  sput(mode step, s.beam pax)
+        sput(mode step, q.beam dek, r.beam da+now, s.beam pax)
+      ;a(class cls, role "treeitem", href loc):"{nam}"
+    ::
+    ::  +pane: the workspace pane, titled with the path it is showing
+    ::
+    ++  pane
+      |=  [cls=tape con=marl]
+      ^-  manx
+      ;section(class cls)
+        ;div.pane-header
+          ;h2:"{?~(s.beam "/" (spud s.beam))}"
+          ;+  acts
+        ==
+        ;div.pane-body
+          ;*  con
+        ==
+      ==
+    ::
+    ::  +acts: what can be done with the node on screen
+    ::
+    ++  acts
+      ^-  manx
+      ;div.pane-actions
+        ;+  ?.  have  :/""
+            ;a.action
+              =id  "download"
+              =href  "{sput(mode %down)}"
+              =download  "{(join '.' (flop (scag 2 (flop s.beam))))}"
+              =title  "download this file"
+              ; download
             ==
-        ;*  %+  turn
-              free  ::  could sort here for dir>file sorting
-            |=  [d=? p=path]
-            =/  s=tape  (slag 1 (spud p))
-            =?  s  d  (snoc s '/')
-            ;a/"{sput(s.beam (weld s.beam p))}":"{s}"
+        ;+  ?:  edit
+              ;a.action
+                =id  "view"
+                =href  "{sput(mode %view)}"
+                =title  "view this file"
+                ; view
+              ==
+            ::  only the head of the desk is editable
+            ?.  =(da+now r.beam)  :/""
+            ;a.action
+              =id  "edit"
+              =href  "{sput(mode %edit)}"
+              =title  "edit this file"
+              ; edit
+            ==
+        ::  upload, into directories at the head of the desk only
+        ;+  ?.  &(!fils =(da+now r.beam))  :/""
+            ;form.upload(method "post", enctype "multipart/form-data")
+              =action  sput(mode %load)
+              ;input(type "file", name "file", required "");
+              ;label
+                =title
+                  "heathcliff carries the mark sources, and can commit ".
+                  "the ones this desk lacks"
+                ;input(type "checkbox", name "marks", value "1");
+                ; install missing marks
+              ==
+              ;button(type "submit", title "upload into this directory")
+                ; upload
+              ==
+            ==
       ==
     ::
     ::TODO  display appropriate message if case is in the future
@@ -1225,8 +1642,10 @@
             ; {cru}
           ==
         ==
-        ;button(type "submit", name "save"):"set {wat} here"
-        ;button(type "submit", name "clear"):"clear - inherit from parent"
+        ;div.pane-actions
+          ;button(type "submit", name "save"):"set {wat} here"
+          ;button(type "submit", name "clear"):"clear - inherit from parent"
+        ==
       ==
     ::
     ::  +crews: the crew list and its editor.  crews are per-ship, not per
@@ -1291,7 +1710,7 @@
       ^-  manx
       =/  d  pear
       =/  s  sown
-      ;section.perm
+      ;div.perm
         ;+  (rite "read" red.d)
         ;+  (sets "read" & red.d)
         ;+  (rite "write" wit.d)
@@ -1342,36 +1761,42 @@
     ++  body
       ^-  manx
       =/  bod=(unit mime)  show
-      ?:  =(%perm mode)  hold
+      ?:  =(%perm mode)  (pane "pane" ~[hold])
       ?:  edit
-        ;section.body.edit
-          ;form(method "post")
-            ;div.container
-              ;textarea(name "file")
-                ;+  :/(trip q.q:(fall bod *mime))
-              ==
-            ==
-            ;div
-              ;button(type "submit", name "save"):"save"
-              ;button(type "submit", name "cancel"):"cancel"
-              ;button(type "submit", name "delete"):"delete"
-            ==
+        %+  pane  "pane editing"
+        :_  ~
+        ;form.editor(method "post")
+          ;textarea.editor-area(name "file", spellcheck "false")
+            ;+  :/(trip q.q:(fall bod *mime))
+          ==
+          ;div.editor-actions
+            ;button(type "submit", name "save"):"save"
+            ;button(type "submit", name "cancel"):"cancel"
+            ;button(type "submit", name "delete"):"delete"
           ==
         ==
+      %+  pane  "pane"
+      :_  ~
       ?:  gone
-        ;section.fail
+        ;div.fail
           ; this file's data has been tombstoned
         ==
       ?.  have
-        ?^  [dir:arch]  :/""
-        ;section.fail
+        ::  navigation lives in the tree, so a node with no data of its own
+        ::  has nothing to show here
+        ::
+        ?:  ?=(^ [dir:arch])
+          ;p.empty
+            ; a directory - pick a file in the tree
+          ==
+        ;div.fail
           ; no data at this path
         ==
       ?~  bod
-        ;section.fail
+        ;div.fail
           ; this file could not be displayed
         ==
-      ;section.body
+      ;div.view
         ;pre:"{(trip q.q.u.bod)}"
       ==
     ::
@@ -1379,10 +1804,10 @@
       ^-  manx
       =/  bod=(unit mime)  show
       ::TODO  need to find a nice way to do conditional inline text
-      ;footer
+      ;footer.status-bar
         ;span(title "case")
           ; rev {(scow %ud ud:cass)} @
-          ; {(scow %da =+(da:cass (sub - (mod - ~s1))))},
+          ; {(scow %da =+(da:cass (sub - (mod - ~s1))))}
         ==
         ;+  ?^  bod
               ;span(title "size")
@@ -1399,7 +1824,6 @@
             ;span(title "tree")
               ; {(scow %ud ~(wyt by dir:arch))} items
             ==
-        ;
         ;a/"{sput(mode %perm)}"
           =title  "read permissions in force here, as of now"
           ; read: {(gist rul.red:pear)}
