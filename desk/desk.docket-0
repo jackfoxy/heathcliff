@@ -2,6 +2,7 @@
   title+'heathcliff'
   info+'filesystem explorer'
   color+0xe3.9871
+  image+'/heathcliff/down/our/heathcliff/now/heathcliff/png'
   version+[1 0 0]
   website+'https://github.com/jackfoxy/heathcliff'
   license+'MIT'

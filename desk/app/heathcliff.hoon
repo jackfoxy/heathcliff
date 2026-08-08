@@ -1062,15 +1062,53 @@
         font-weight: 700;
       }
 
-      .tree-desk + .tree-desk { margin-top: 0.15rem; }
+      .tree-desk > summary { padding: 0.2rem 0 0.2rem 0.2rem; }
 
-      .tree-summary {
-        cursor: pointer;
-        list-style-position: outside;
-        padding-left: 0.2rem;
+      .tree-desk + .tree-desk {
+        border-top: 1px solid var(--border);
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
       }
 
-      .tree-summary::marker { color: var(--muted); }
+      /* the whole row toggles, so the caret is ours rather than the
+         browser's: a default marker sits outside the box and is
+         nearly impossible to hit */
+      .tree-summary {
+        align-items: center;
+        cursor: pointer;
+        display: flex;
+        gap: 0.1rem;
+        list-style: none;
+        min-width: 0;
+      }
+
+      .tree-summary::-webkit-details-marker { display: none; }
+
+      .tree-caret {
+        align-items: center;
+        color: var(--muted);
+        display: inline-flex;
+        flex: 0 0 auto;
+        height: 1.15rem;
+        justify-content: center;
+        width: 1.15rem;
+      }
+
+      .tree-caret::before {
+        border-bottom: 0.22rem solid transparent;
+        border-left: 0.34rem solid currentcolor;
+        border-top: 0.22rem solid transparent;
+        content: "";
+        transition: transform 0.12s ease;
+      }
+
+      .tree-summary:hover .tree-caret { color: var(--text); }
+
+      details[open] > .tree-summary > .tree-caret::before {
+        transform: rotate(90deg);
+      }
+
+      .tree-summary > .tree-link { flex: 0 1 auto; min-width: 0; }
 
       .tree-kids {
         border-left: 1px solid var(--border);
@@ -1346,6 +1384,52 @@
             }
           });
         }
+        const opened = 'heathcliff.tree.open';
+        const cap = 400;
+        const tree = document.getElementById('file-tree');
+        if (tree) {
+          // remembered state wins over what the page shipped open, so
+          // collapsing the desk you are browsing sticks.  desks also record
+          // the state they arrived in, so a desk opened by navigating into
+          // it stays open when you navigate somewhere else.  directories
+          // are only remembered once toggled, to keep this small
+          let saved = null;
+          try { saved = JSON.parse(localStorage.getItem(opened)); } catch (e) {}
+          if (!saved || typeof saved !== 'object' || Array.isArray(saved)) {
+            saved = {};
+          }
+          const keep = () => {
+            const keys = Object.keys(saved);
+            keys.slice(0, Math.max(0, keys.length - cap))
+                .forEach((key) => { delete saved[key]; });
+            try { localStorage.setItem(opened, JSON.stringify(saved)); }
+            catch (e) {}
+          };
+          tree.querySelectorAll('details[data-node]').forEach((node) => {
+            const key = node.dataset.node;
+            if (key in saved) node.open = saved[key];
+            else if (node.classList.contains('tree-desk')) {
+              saved[key] = node.open;
+            }
+          });
+          // landing on a branch itself is a request to see inside it, which
+          // outranks having collapsed it earlier
+          const landed = tree.querySelector('summary > .tree-here');
+          const branch = landed && landed.closest('details[data-node]');
+          if (branch) {
+            branch.open = true;
+            saved[branch.dataset.node] = true;
+          }
+          keep();
+          // toggle does not bubble, so listen on the way down
+          tree.addEventListener('toggle', (event) => {
+            const key = event.target.dataset && event.target.dataset.node;
+            if (!key) return;
+            delete saved[key];
+            saved[key] = event.target.open;
+            keep();
+          }, true);
+        }
         const here = document.querySelector('.tree-here');
         if (here) here.scrollIntoView({ block: 'center' });
       })();
@@ -1439,15 +1523,20 @@
       =/  sub=(list path)
         ?:  cur  hive
         .^((list path) %ct rend(q.beam dek, r.beam da+now, s.beam ~))
+      =/  key=tape  (trip dek)
       =/  det=manx
-        ;details.tree-desk
+        ;details.tree-desk(data-node key)
           ;summary.tree-summary
+            ;span.tree-caret(aria-hidden "true");
             ;+  (item dek cur ~ "%{(trip dek)}" &)
           ==
           ;div.tree-kids
             ;*  (limb dek cur ~ sub)
           ==
         ==
+      ::  the desk on screen is open on arrival; the browser remembers the
+      ::  rest, so several desks can be open at once
+      ::
       =?  a.g.det  cur  [[%open ""] a.g.det]
       det
     ::
@@ -1473,9 +1562,11 @@
         (item dek cur pax (trip nom) |)
       ?:  ?=([[@ ~] ~] kits)
         (item dek cur (snoc pax i.i.kits) "{(trip nom)}/{(trip i.i.kits)}" |)
+      =/  key=tape  "{(trip dek)}{(spud pax)}"
       =/  det=manx
-        ;details.tree-dir
+        ;details.tree-dir(data-node key)
           ;summary.tree-summary
+            ;span.tree-caret(aria-hidden "true");
             ;+  (item dek cur pax (trip nom) &)
           ==
           ;div.tree-kids
