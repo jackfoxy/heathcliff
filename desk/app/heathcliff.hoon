@@ -5,6 +5,7 @@
 ::TODO  code quality
 ::
 /+  multipart, server, dbug, verb, default-agent
+/*  fav  %png  /favicon/png
 ::
 |%
 +$  state-0  [%0 pend=(map eyre-id [=mode =beam])]  ::  posts pending response
@@ -245,6 +246,18 @@
     ?(%docket-0 %jam %map %udon %umd %urb)           `/text/plain
     %noun-autodiff                                   `/text/plain
   ==
+::
+::  +icon: our favicon, as a data uri
+::
+::    carried in the page rather than served from a route.  a route would
+::    need the reader's session for what is a subresource, and would have to
+::    name the desk we happen to be installed on; a data uri needs neither,
+::    and is one fewer request.  ~+ so we encode it once, not per page.
+::
+++  icon  ~+
+  ^-  tape
+  %+  weld  "data:image/png;base64,"
+  (trip (en:base64:mimes:html [(met 3 fav) fav]))
 ::
 ::  +limit: largest upload we'll accept, to keep a stray POST from
 ::          committing something enormous into a desk
@@ -1442,6 +1455,7 @@
           ;title:"%heathcliff: {spot}"
           ;meta(charset "utf-8");
           ;meta(name "viewport", content "width=device-width, initial-scale=1");
+          ;link#favicon(rel "icon", type "image/png", href icon);
           ;style:"{(trip style)}"
         ==
         ;body
