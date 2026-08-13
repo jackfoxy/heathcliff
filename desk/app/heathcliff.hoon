@@ -207,6 +207,8 @@
     %hymn        `/text/html
     %xml         `/text/xml
     %csv         `/text/csv
+    %tab         `/text/tab-separated-values
+    %md          `/text/markdown
     ::  '+' isn't a legal knot character, so this one can't be a path literal
     %svg         [~ `mite`~['image' 'svg+xml']]
     ::  images
@@ -545,7 +547,7 @@
       ?:  (~(has by arm) 'cancel')
         [%| (crip sput(mode %view)) ~]
       ?:  (~(has by arm) 'delete')
-        :+  %|  (crip sput)
+        :+  %|  (crip sput(mode %view, s.beam (snip s.beam)))
         [%pass /edit/delete %arvo %c %info (fray:space:userlib rend)]~
       ?.  (~(has by arm) 'save')  [%& wack]
       ?.  (~(has by arm) 'file')  [%& wack]
@@ -1030,6 +1032,13 @@
         white-space: nowrap;
       }
 
+      .tree-pane .pane-header h2 {
+        min-width: 0;
+        overflow-wrap: anywhere;
+        text-overflow: clip;
+        white-space: normal;
+      }
+
       .up {
         align-items: center;
         border: 1px solid var(--border);
@@ -1128,6 +1137,73 @@
         margin-left: 0.5rem;
         padding-left: 0.35rem;
       }
+
+      .tree-file-row {
+        align-items: center;
+        border-radius: 0.25rem;
+        display: flex;
+        max-width: 100%;
+        min-width: 0;
+        vertical-align: middle;
+        width: 100%;
+      }
+
+      .tree-file-group {
+        display: block;
+        max-width: 100%;
+        min-width: 0;
+      }
+
+      .tree-file-row:hover { background: var(--surface-alt); }
+
+      .tree-file-row > .tree-link {
+        flex: 1 1 auto;
+        max-width: calc(100% - 2rem);
+        min-width: 0;
+      }
+
+      .tree-file-actions {
+        flex: 0 0 auto;
+        margin-left: auto;
+        min-height: 1.55rem;
+        padding: 0 0.45rem;
+        position: sticky;
+        right: 0;
+      }
+
+      .file-context-menu {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 0.4rem;
+        box-shadow: 0 0.7rem 2rem rgb(0 0 0 / 0.16);
+        display: grid;
+        min-width: 8rem;
+        padding: 0.3rem;
+        position: fixed;
+        z-index: 60;
+      }
+
+      .file-context-menu a, .file-context-menu button {
+        background: transparent;
+        border: 0;
+        border-radius: 0.25rem;
+        display: block;
+        min-height: 2rem;
+        padding: 0.45rem 0.55rem;
+        text-align: left;
+      }
+
+      .file-context-menu a:hover,
+      .file-context-menu button:hover:not(:disabled) {
+        background: var(--surface-alt);
+      }
+
+      .file-context-menu button:disabled {
+        color: var(--muted);
+        cursor: not-allowed;
+      }
+
+      .hidden { display: none !important; }
 
       .splitter {
         background: var(--border);
@@ -1364,14 +1440,48 @@
         const pane = document.getElementById('tree-pane');
         const bar = document.getElementById('splitter');
         const least = 140;
+        const header = pane && pane.querySelector('.pane-header');
+        const heading = header && header.querySelector('h2');
+        const headerStyle = header && getComputedStyle(header);
+        const padding = headerStyle
+          ? parseFloat(headerStyle.paddingLeft) +
+            parseFloat(headerStyle.paddingRight)
+          : 0;
+        const gap = headerStyle ? parseFloat(headerStyle.gap) || 0 : 0;
+        const controls = header
+          ? Array.from(header.children).slice(1).reduce(
+              (width, control) => width + control.offsetWidth,
+              0
+            )
+          : 0;
+        const gaps = header
+          ? Math.max(0, header.children.length - 1) * gap
+          : 0;
+        const shipWidth = heading
+          ? (() => {
+              const whiteSpace = heading.style.whiteSpace;
+              heading.style.whiteSpace = 'nowrap';
+              const width = heading.scrollWidth;
+              heading.style.whiteSpace = whiteSpace;
+              return width;
+            })()
+          : 0;
+        const preferred = Math.max(
+          least,
+          Math.ceil(shipWidth + controls + gaps + padding)
+        );
         const apply = (px) => {
-          const wide = Math.min(Math.max(px, least), window.innerWidth - 240);
+          const most = Math.max(least, window.innerWidth - 240);
+          const wide = Math.min(Math.max(px, least), most);
           root.style.setProperty('--tree-width', wide + 'px');
           try { localStorage.setItem(store, String(wide)); } catch (e) {}
         };
         let kept = NaN;
         try { kept = parseInt(localStorage.getItem(store), 10); } catch (e) {}
         if (kept > 0) apply(kept);
+        else if (pane) {
+          apply(Math.max(pane.getBoundingClientRect().width, preferred));
+        }
         if (pane && bar) {
           bar.addEventListener('pointerdown', (event) => {
             bar.setPointerCapture(event.pointerId);
@@ -1445,6 +1555,107 @@
         }
         const here = document.querySelector('.tree-here');
         if (here) here.scrollIntoView({ block: 'center' });
+
+        const menu = document.getElementById('file-context-menu');
+        const open = document.getElementById('file-context-open');
+        const remove = document.getElementById('file-context-delete');
+        const form = document.getElementById('file-delete-form');
+        let source = null;
+        let target = null;
+
+        const closeMenu = (restore = false) => {
+          menu.classList.add('hidden');
+          if (source) {
+            source.setAttribute('aria-expanded', 'false');
+            if (restore) source.focus();
+          }
+          source = null;
+          target = null;
+        };
+
+        const clamp = (value, minimum, maximum) => {
+          return Math.min(Math.max(value, minimum), maximum);
+        };
+
+        const showMenu = (row, button, event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          closeMenu();
+          source = button;
+          target = row;
+          source.setAttribute('aria-expanded', 'true');
+          open.href = row.dataset.open;
+          remove.disabled = !row.dataset.delete;
+          menu.style.left = '0px';
+          menu.style.top = '0px';
+          menu.classList.remove('hidden');
+          const menuBox = menu.getBoundingClientRect();
+          const sourceBox = source.getBoundingClientRect();
+          const margin = 8;
+          const pointer = event.type === 'contextmenu';
+          const maximumLeft = window.innerWidth - menuBox.width - margin;
+          const maximumTop = window.innerHeight - menuBox.height - margin;
+          const left = clamp(
+            pointer ? event.clientX : sourceBox.right,
+            margin,
+            maximumLeft
+          );
+          const top = clamp(
+            pointer ? event.clientY : sourceBox.top,
+            margin,
+            maximumTop
+          );
+          menu.style.left = `${left}px`;
+          menu.style.top = `${top}px`;
+          open.focus();
+        };
+
+        document.querySelectorAll('.tree-file-row').forEach((row) => {
+          const actions = row.querySelector('.tree-file-actions');
+          row.addEventListener('contextmenu', (event) => {
+            showMenu(row, actions, event);
+          });
+          actions.addEventListener('click', (event) => {
+            showMenu(row, actions, event);
+          });
+        });
+
+        open.addEventListener('click', () => closeMenu());
+        remove.addEventListener('click', () => {
+          if (!target || !target.dataset.delete) return;
+          const name = target.dataset.label;
+          if (!window.confirm(`Delete ${name}? This cannot be undone.`)) {
+            closeMenu(true);
+            return;
+          }
+          form.action = target.dataset.delete;
+          form.requestSubmit();
+        });
+
+        const editorDelete = document.querySelector(
+          '.editor button[name="delete"]'
+        );
+        if (editorDelete) {
+          editorDelete.addEventListener('click', (event) => {
+            if (!window.confirm('Delete this file? This cannot be undone.')) {
+              event.preventDefault();
+            }
+          });
+        }
+
+        document.addEventListener('click', (event) => {
+          if (!event.target.closest('#file-context-menu') &&
+              !event.target.closest('.tree-file-actions')) {
+            closeMenu();
+          }
+        });
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape' &&
+              !menu.classList.contains('hidden')) {
+            closeMenu(true);
+          }
+        });
+        window.addEventListener('resize', () => closeMenu());
       })();
       '''
     ::
@@ -1477,6 +1688,15 @@
                 ;+  meta
               ==
             ==
+          ==
+          ;div#file-context-menu.file-context-menu.hidden(role "menu")
+            ;a#file-context-open(href "", role "menuitem"):"Open"
+            ;button#file-context-delete(type "button", role "menuitem")
+              ; Delete
+            ==
+          ==
+          ;form#file-delete-form.hidden(method "post")
+            ;input(type "hidden", name "delete", value "1");
           ==
           ;script:"{(trip script)}"
         ==
@@ -1556,8 +1776,7 @@
     ::
     ::  +limb: one level of a desk's tree, as tree items
     ::
-    ::    a node whose only child is a leaf is a file with its mark hanging
-    ::    off it, so the two render as one entry.
+    ::    a known final mark hangs off the preceding node in one file row.
     ::
     ++  limb
       |=  [dek=desk cur=? pre=path sub=(list path)]
@@ -1572,10 +1791,27 @@
       ^-  manx
       =/  pax=path          (snoc pre nom)
       =/  kits=(list path)  (~(get ja kid) nom)
-      ?:  ?=([~ ~] kits)
-        (item dek cur pax (trip nom) |)
-      ?:  ?=([[@ ~] ~] kits)
-        (item dek cur (snoc pax i.i.kits) "{(trip nom)}/{(trip i.i.kits)}" |)
+      =/  out=[plain=? marks=(list @ta) down=(list path)]
+        %+  roll  kits
+        |=  $:  p=path
+                acc=[plain=? marks=(list @ta) down=(list path)]
+            ==
+        ?~  p  acc(plain %.y)
+        ?.  ?=([@ ~] p)  acc(down [p down.acc])
+        ?.  ?=(^ (ctype i.p))  acc(down [p down.acc])
+        acc(marks [i.p marks.acc])
+      =/  files=marl
+        %+  turn  (sort marks.out aor)
+        |=  mar=@ta
+        (item dek cur (snoc pax mar) "{(trip nom)}/{(trip mar)}" |)
+      =/  rows=marl
+        ?:  &(plain.out =(~ marks.out) =(~ down.out))
+          [(item dek cur pax (trip nom) |) files]
+        files
+      ?~  down.out
+        ;div.tree-file-group
+          ;*  rows
+        ==
       =/  key=tape  "{(trip dek)}{(spud pax)}"
       =/  det=manx
         ;details.tree-dir(data-node key)
@@ -1584,14 +1820,17 @@
             ;+  (item dek cur pax (trip nom) &)
           ==
           ;div.tree-kids
-            ;*  (limb dek cur pax kits)
+            ;*  (limb dek cur pax down.out)
           ==
         ==
       ::  open the branches that lead to the node on screen
       ::
       =?  a.g.det  &(cur =(pax (scag (lent pax) s.beam)))
         [[%open ""] a.g.det]
-      det
+      ;div.tree-file-group
+        ;*  rows
+        ;+  det
+      ==
     ::
     ::  +item: one tree entry, marked when it is the node on screen
     ::
@@ -1607,7 +1846,27 @@
       =/  loc=tape
         ?:  cur  sput(mode step, s.beam pax)
         sput(mode step, q.beam dek, r.beam da+now, s.beam pax)
-      ;a(class cls, role "treeitem", href loc):"{nam}"
+      ?:  dir
+        ;a(class cls, role "treeitem", href loc):"{nam}"
+      =/  del=tape
+        ?.  |(!cur =(da+now r.beam))  ""
+        ?:  cur
+          sput(mode %edit, s.beam pax)
+        sput(mode %edit, q.beam dek, r.beam da+now, s.beam pax)
+      ;div.tree-file-row
+        =role  "treeitem"
+        =data-open  loc
+        =data-delete  del
+        =data-label  nam
+        ;a(class cls, href loc, title "{nam}"):"{nam}"
+        ;button.tree-file-actions
+          =type  "button"
+          =aria-label  "Actions for {nam}"
+          =aria-haspopup  "menu"
+          =aria-expanded  "false"
+          ; …
+        ==
+      ==
     ::
     ::  +pane: the workspace pane, titled with the path it is showing
     ::
