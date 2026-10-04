@@ -2,19 +2,19 @@
 ::::  /hoon/md/mar
   ::
 /?    310
-=,  eyre
+::
+=,  format
 =,  mimes:html
-|_  mud=@t
-++  grow                                                ::  convert to
+|_  txt=wain
+::
+++  grab                                                ::  convert from
   |%
-  ++  mime  [/text/markdown (as-octs mud)]              ::  convert to %mime
-  ++  txt   (to-wain:format mud)
+  ++  mime  |=((pair mite octs) (to-wain q.q))
+  ++  noun  wain                                        ::  clam from %noun
   --
-++  grab
-  |%                                                    ::  convert from
-  ++  mime  |=([p=mite q=octs] q.q)
-  ++  noun  @t                                          ::  clam from %noun
-  ++  txt   of-wain:format
+++  grow
+  |%
+  ++  mime  [/text/plain (as-octs (of-wain txt))]
   --
 ++  grad  %mime
 --
