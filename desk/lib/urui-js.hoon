@@ -1153,14 +1153,15 @@
   }
 
   //  Everything beside the top modal goes inert; nodes the page had
-  //  already made inert are left alone.
+  //  already made inert are left alone, and so is the wrapper of a
+  //  consumer dialog (`div.app-dialogs`).
   function syncModalInert() {
     for (const node of modalInert) node.inert = false;
     modalInert.clear();
     const top = topModal()?.element();
     if (!top) return;
     for (const node of Array.from(document.body?.children || [])) {
-      if (node === top || node.inert
+      if (node === top || node.contains?.(top) || node.inert
         || node.getAttribute?.('aria-live')) {
         continue;
       }

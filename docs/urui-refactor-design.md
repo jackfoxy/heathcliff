@@ -5,7 +5,7 @@ Reference `%base` is `/mnt/mars/piers/newcomet/base` (`[%zuse 408]`).
 
 ## 1. Mark audit (step 1.1)
 
-Every `desk/mar/*.hoon` (51 files) was read: sample, `grab`, `grow`, `grad`.
+Every `desk/mar/*.hoon` (52 files) was read: sample, `grab`, `grow`, `grad`.
 Marks shared with `%base` are byte-identical to it after step 0.1.
 
 ### Representation classes
@@ -59,8 +59,7 @@ Codec names are urui-files codecs (§3). Result pane is Heathcliff's renderer.
 | jam | `view`, hex (bounded) | hex; Download (no `cue` in browser) |
 | noun | `view`, bounded pretty-print | same; Download gives jam bytes |
 | mime | `view`, stored type + length + bounded hex | dispatch on stored type: image/audio/video/text, active types in a sandboxed frame |
-| hymn, urb | `view`, rendered XML text | sandboxed iframe of the raw route's HTML conversion |
-| snip | `view`, rendered XML text | sandboxed iframe of the raw route's HTML conversion |
+| hymn, urb, snip | `view`, rendered XML text | sandboxed iframe of the raw route, whose export is the mark's own `text/html` |
 | txt-diff | `view`, hunks listed | same; no base document inferred |
 | any other mark | `view`, bounded noun or bytes | Download when a mime conversion is known |
 
@@ -143,6 +142,8 @@ Browser, `lib/urui-js.hoon`:
    shortcut swallowing).
 5. `runtime.documents.previews.get(mark)` returns a registered previewer so
    a consumer can draw it into its own result pane.
+6. The modal controller no longer makes a consumer dialog's own wrapper
+   (`div.app-dialogs`) inert.
 
 ### Heathcliff layout
 
@@ -161,7 +162,7 @@ Browser, `lib/urui-js.hoon`:
   (all), Upload… (current directories and roots), Delete (current files).
   Every row has an item-actions button.
 
-### Routes (all under `/heathcliff`, authenticated)
+### Routes (under `/heathcliff`; the page and data routes need a session)
 
 | Route | Use |
 | --- | --- |
@@ -169,8 +170,9 @@ Browser, `lib/urui-js.hoon`:
 | `GET /heathcliff/ace/...`, `/heathcliff/app.js`, `/heathcliff/app.css` | assets |
 | `POST /heathcliff/files` | urui file wire |
 | `POST /heathcliff/api` | tree, attributes, permissions, crews, upload check |
-| `GET /heathcliff/raw/<desk>/<case>/<path>` | raw bytes for previews; `?download` adds attachment; `?as=html` for hymn/urb/snip |
-| `POST /heathcliff/upload/<desk>/<path>` | multipart upload, verified |
+| `GET /heathcliff/raw/<desk>/<case>/<path>` | a file's export for previews; `?download` makes it an attachment |
+| `POST /heathcliff/upload/<desk>/now/<dir>` | multipart upload, verified |
+| `GET /heathcliff/favicon.png`, `/heathcliff/heathcliff.png` | icon, docket tile image |
 
 Old `/heathcliff/{view,edit,perm,down,load}/...` routes are removed with no
 redirect. Raw responses carry `x-content-type-options: nosniff` and
@@ -183,10 +185,37 @@ unless converted for a sandboxed preview.
   (`ctype`, `kin`, `splt`, `safe`, mark source), file policy and `view`.
 - `lib/heathcliff-perm.hoon`: rules, scan, crews, ship parsing, JSON.
 - `lib/heathcliff-transfer.hoon`: upload planning and download payloads.
-- `lib/heathcliff-web.hoon`: shell spec, config, css, app-js.
+- `lib/heathcliff-web.hoon`: shell spec, config, file policy, css, app-js.
+- `lib/heathcliff-api.hoon`: the JSON route (roots, tree, attributes,
+  rule and crew changes, upload checks).
 - `app/heathcliff.hoon`: routing, auth, cards, `on-arvo`.
 - State `%2` = `%1` plus non-persisted pending file and upload writes; `%0`
   and `%1` load forward keeping `cez`/`use`, then re-mirror.
+- The docket tile now uses `/heathcliff/heathcliff.png` and the site
+  `/heathcliff`; both old values pointed at removed routes.
+- A browse of the namespace root (urui's file dialog, before a draft's
+  first save) answers no entries; a draft's path is typed as
+  `desk/now/folder/name.mark`.
+
+## 4. Removed code (step 8.1)
+
+The old agent's page and its helpers are gone, replaced by urui and the
+libraries above: `+page` with `+style`, `+script`, `+full`, `+site`,
+`+navi`, `+dnod`, `+limb`, `+item`, `+pane`, `+acts`, `+folk`, `+rite`,
+`+sets`, `+crews`, `+hold`, `+body`, `+meta`; the `+mode` routes `%view`
+`%edit` `%perm` `%down` `%load` with `+view`, `+edit`, `+perm`, `+down`,
+`+load`, `+show`, `+deed`, `+oops`, `+deny`/`+miss`/`+wack`, `+sput`,
+`+spot`, `+hive`; and `+icon` (the favicon is now a route). Logic that
+survived moved: `+ctype`, `+kin`, `+safe`, `+splt`, `+live` and the
+tombstone checks to heathcliff-clay; `+owns`, `+gist`, `+ships`, `+words`,
+`+tally`, `+fleet`, `+named`, `+grant`, `+crew-save`, `+crew-kill`,
+`+cited`, `+pear`, `+sown` to heathcliff-perm; `+want`, `+vend`, `+take`,
+`+raw` to heathcliff-transfer.
+
+Every remaining library, sur and mark has a caller or a role: `cram` is
+imported by the udon and umd marks, `skeleton` by default-agent, `docket`
+by the docket-0 mark and heathcliff-clay, `test` by the suites, and every
+mark is both a browsing policy and an install source.
 
 ## Questions
 
