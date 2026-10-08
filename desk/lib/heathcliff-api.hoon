@@ -76,14 +76,21 @@
       (find-beak bowl u.desk u.seg)
     ?:  ?=(%| -.where)  [%| p.where]
     =/  found=(each (list path) tang)  (listing:hc beak.p.where u.scope)
+    =/  paths=(list path)  ?:(?=(%| -.found) ~ p.found)
+    ::  files whose data at this revision is gone
+    =/  tombs=(list path)
+      %+  skip  paths
+      |=(p=path (live:hc bowl (en-beam beak.p.where p)))
+    =/  to-json
+      |=  p=path
+      ^-  json
+      a+(turn p |=(s=@ta s+s))
     %-  answer
     %-  ok-json:ufiles
     :~  ['rev' (numb:enjs:format head.p.where)]
         ['case' s+(case-seg:hc bowl r.beak.p.where)]
-        :-  'paths'
-        :-  %a
-        %+  turn  ?:(?=(%| -.found) ~ p.found)
-        |=(p=path a+(turn p |=(s=@ta s+s)))
+        ['paths' a+(turn paths to-json)]
+        ['tombs' a+(turn tombs to-json)]
     ==
   ::
       [~ %attributes]

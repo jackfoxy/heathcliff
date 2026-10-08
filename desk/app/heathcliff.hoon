@@ -109,6 +109,26 @@
   =/  attach=?  (lien args |=([key=@t *] =('download' key)))
   (payload:ht rel.p.where u.out attach)
 ::
+++  tomb
+  ::  Tombstone a file's data at an old revision, answered once clay acts.
+  |=  [=bowl:gall eyre-id=@ta req=inbound-request:eyre]
+  ^-  (list card)
+  =/  no
+    |=  =failure:ufiles
+    ^-  (list card)
+    (refuse:ufiles eyre-id failure)
+  ?.  =(%'POST' method.request.req)
+    (no (fail:ufiles %bad-request 405 'method not allowed'))
+  =/  jon=(unit json)
+    ?~  body.request.req  ~
+    (de:json:html q.u.body.request.req)
+  ?.  ?=([~ %o *] jon)  (no (fail:ufiles %bad-request 400 'malformed request'))
+  =/  wire=(unit path)  (path-field:ha p.u.jon 'path')
+  ?~  wire  (no (fail:ufiles %bad-request 400 'missing path'))
+  =/  planned=(each (list card) @t)  (tomb-plan:ht bowl eyre-id u.wire)
+  ?:  ?=(%| -.planned)  (no (fail:ufiles %bad-request 400 p.planned))
+  p.planned
+::
 ++  upload
   ::  A multipart upload into `dir` on `desk`, verified before it is
   ::  answered.
@@ -220,6 +240,8 @@
     [cards this]
   ?:  =(~[%api] rest)
     [(handle:ha bowl eyre-id req cez.state use.state) this]
+  ?:  =(~[%tomb] rest)
+    [(tomb bowl eyre-id req) this]
   ?:  ?=([%upload @ %now *] rest)
     =^  cards  load.state
       (upload bowl eyre-id i.t.rest t.t.t.rest req load.state)
@@ -254,6 +276,15 @@
   ?:  ?=([%perm %crow @ ~] wire)
     ?>  ?=([%clay %croz *] sign-arvo)
     [~ this(use (~(put by use) i.t.t.wire rus.sign-arvo))]
+  ::  clay acks every %cred, and a %perm only when it fails
+  ?:  ?=([%perm ?(%cred %set) ~] wire)
+    ?>  ?=([%clay %done *] sign-arvo)
+    ~?  ?=(^ error.sign-arvo)
+      [dap.bowl %perm-failed wire error.sign-arvo]
+    [~ this]
+  ?:  ?=([%tomb %clay ~] wire)  [~ this]
+  =/  tombed=(unit (list card))  (tomb-take:ht bowl wire sign-arvo)
+  ?^  tombed  [u.tombed this]
   =/  file=(unit outcome:ufiles)
     (take:ufiles file-policy:web bowl wire sign-arvo files.state)
   ?^  file

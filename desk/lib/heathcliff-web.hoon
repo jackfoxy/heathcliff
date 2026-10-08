@@ -280,6 +280,23 @@
           ==
         ==
       ==
+      ;aside#hc-tomb.help-panel
+        =hidden           ""
+        =role             "alertdialog"
+        =aria-modal       "true"
+        =aria-labelledby  "hc-tomb-title"
+        =aria-describedby  "hc-tomb-message"
+        ;div.help-card.hc-dialog-card
+          ;div.pane-header
+            ;h2#hc-tomb-title: Delete from history
+          ==
+          ;p#hc-tomb-message;
+          ;div.dialog-actions
+            ;button#hc-tomb-cancel(type "button"): Cancel
+            ;button#hc-tomb-ok.danger-button(type "button"): Delete
+          ==
+        ==
+      ==
       ;aside#hc-revision.help-panel
         =hidden           ""
         =role             "dialog"
@@ -401,17 +418,41 @@
     align-items: stretch;
     font-size: 0.85em;
   }
-  .hc-case input { width: auto; font: inherit; }
+  .hc-case-field {
+    display: inline-flex;
+    align-items: center;
+    box-sizing: border-box;
+    border: 1px solid var(--line, #ccc);
+    border-radius: 3px;
+    padding: 0 0.25ch;
+    font-variant-numeric: tabular-nums;
+  }
+  .hc-case-field:focus-within { outline: 1px solid var(--accent, #4a6da7); }
+  .hc-now { color: #16a34a; flex: 0 0 auto; }
+  :root[data-effective-theme='dark'] .hc-now { color: #4ade80; }
+  .hc-case input {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 0;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: right;
+    outline: none;
+  }
   .hc-case button {
     font: inherit;
-    padding: 0 0.25rem;
+    padding: 0 0.15rem;
+    min-width: 0;
     line-height: 1;
   }
   .hc-selected > .hc-toggle, .hc-file.hc-active {
     outline: 1px solid var(--accent, #4a6da7);
     border-radius: 3px;
   }
-  .hc-file.hc-tomb { text-decoration: line-through; color: var(--muted); }
+  .hc-file.hc-tomb { color: var(--muted); font-style: italic; }
   .hc-note { color: var(--muted); margin: 0.25rem 0.5rem; }
   .hc-error { color: var(--danger, #b42318); }
   .hc-result { display: grid; gap: 0.5rem; padding: 0.5rem; min-width: 0; }
@@ -516,8 +557,8 @@
     }
 
     // ---- the server ----------------------------------------------------
-    async function api(op, body = {}) {
-      const response = await fetch(`${base}/api`, {
+    async function api(op, body = {}, url = `${base}/api`) {
+      const response = await fetch(url, {
         method: 'POST',
         credentials: 'same-origin',
         headers: {'content-type': 'application/json'},
@@ -558,6 +599,8 @@
     //  directories, persisted; and the listing of each desk and case.
     let trees = {apps: {cases: {}, open: {}}, data: {cases: {}, open: {}}};
     const listings = {apps: new Map(), data: new Map()};
+    //  wire paths, joined, of files whose data is tombstoned
+    const tombstones = new Set();
     const selected = {apps: null, data: null};
     let roots = [];
     //  per view and desk: the revision box's `pick` and its head
@@ -611,7 +654,7 @@
 
     function openMenu(view, source, event, target) {
       runtime.explorer.context.open(store, target.path, source, event, {
-        entry: target.entry, view
+        entry: target.entry, view, tomb: Boolean(target.tomb)
       });
     }
 
@@ -707,10 +750,15 @@
         });
         branch.files.push(path);
       }
-      //  the Data view starts below /data
+      //  the Data view starts below /data, and below /data/<desk> too
+      //  when that folder is all /data holds, as an app's file root is
       let start = top;
       for (const part of scope) {
         start = start.dirs.get(part) || {dirs: new Map(), files: []};
+      }
+      const own = start.dirs.get(desk);
+      if (scope.length && own && start.dirs.size === 1 && !start.files.length) {
+        start = own;
       }
       const build = (branch) => {
         const nodes = [];
@@ -734,26 +782,33 @@
         }
         return nodes;
       };
-      return build(start);
+      return {nodes: build(start), root: start.path || scope};
     }
 
     const fileLabel = (path) => {
       return `${path[path.length - 2]}.${path[path.length - 1]}`;
     };
 
+    //  a tombstoned file is listed, marked, and cannot be opened
     function fileRow(view, wire) {
+      const tomb = tombstones.has(wire.join('/'));
       const label = fileLabel(wire);
-      const target = {path: wire, entry: 'file'};
+      const target = {path: wire, entry: 'file', tomb};
       const row = make('div', {class: 'hc-row explorer-file-row'});
       const button = make('button', {
-        type: 'button', class: 'hc-file', text: label, title: clayText(wire)
+        type: 'button',
+        class: tomb ? 'hc-file hc-tomb' : 'hc-file',
+        text: tomb ? `${label} (tombstoned)` : label,
+        title: tomb
+          ? `${clayText(wire)}: its data has been tombstoned`
+          : clayText(wire)
       });
       button.dataset.path = wire.join('/');
       target.row = row;
       button.addEventListener('click', () => {
         runtime.explorer.context.close();
         setSelected(view, target);
-        openFile(wire);
+        if (!tomb) openFile(wire);
       });
       button.addEventListener('keydown', menuKeys(view, button, target));
       row.addEventListener('contextmenu', (event) => {
@@ -768,6 +823,9 @@
       const key = `${desk}:${cas}`;
       if (!force && listings[view].has(key)) return listings[view].get(key);
       const answer = await api('tree', {desk, case: cas, scope: scopeOf(view)});
+      for (const path of answer.tombs || []) {
+        tombstones.add([desk, cas, ...path].join('/'));
+      }
       listings[view].set(key, answer.paths);
       return answer.paths;
     }
@@ -781,6 +839,11 @@
         delete trees[view].cases[root.desk];
       }
       const wrap = make('span', {class: 'hc-case'});
+      //  `now` sits left in the box, green, while the number sits right
+      const field = make('span', {class: 'hc-case-field'});
+      const label = make('span', {
+        class: 'hc-now', text: 'now', 'aria-hidden': 'true'
+      });
       const input = make('input', {
         type: 'text',
         inputmode: 'numeric',
@@ -801,9 +864,11 @@
       };
       const show = () => {
         const number = current();
-        input.value = number >= head ? `now ${head}` : String(number);
-        //  wide enough for the longest value this desk can show
-        input.size = `now ${head}`.length + 1;
+        input.value = String(number);
+        label.style.visibility = number >= head ? 'visible' : 'hidden';
+        //  one width for every desk, so the numbers line up in a column
+        const widest = Math.max(1, ...roots.map((item) => item.rev || 1));
+        field.style.width = `${String(widest).length + 5}ch`;
         up.disabled = number >= head;
         down.disabled = number <= 1;
       };
@@ -824,7 +889,7 @@
       input.addEventListener('change', () => {
         const text = input.value.trim().replace(/^now */, '');
         const number = Number(text);
-        if (text === '' || input.value.trim().startsWith('now')) pick(head);
+        if (text === '') pick(head);
         else pick(number, text);
       });
       const step = (by) => {
@@ -840,7 +905,8 @@
       down.addEventListener('click', () => step(-1));
       revisions[view].set(root.desk, {pick, head, current});
       show();
-      wrap.append(input, up, down);
+      field.append(label, input);
+      wrap.append(field, up, down);
       return wrap;
     }
 
@@ -865,7 +931,10 @@
           return;
         }
         if (caseOf(view, root.desk) !== cas) return;
-        const nodes = treeNodes(view, root.desk, cas, scopeOf(view), paths);
+        const built = treeNodes(view, root.desk, cas, scopeOf(view), paths);
+        const nodes = built.nodes;
+        //  menus on the root act on the folder it shows
+        target.path = [root.desk, cas, ...built.root];
         if (!nodes.length) {
           kids.replaceChildren(make('p', {
             class: 'hc-note',
@@ -877,7 +946,7 @@
         kids.replaceChildren(...nodes);
         markActive();
       };
-      //  Data shows each desk's /data directory itself as the root
+      //  Data shows each desk's data directory itself as the root
       const data = view === 'data';
       const extra = [];
       if (!data && root.title !== root.desk) {
@@ -885,7 +954,7 @@
       }
       extra.push(caseInput(view, root, () => refill()));
       node = disclosure(view, {
-        label: data ? `%${root.desk}/data/` : root.title,
+        label: data ? `%${root.desk}` : root.title,
         title: `${root.title} (%${root.desk})`,
         key: `${root.desk}:root`,
         target,
@@ -935,6 +1004,9 @@
 
     //  After a save, delete, or upload on a desk, its listings are stale.
     function refreshDesk(desk) {
+      for (const key of [...tombstones]) {
+        if (key.startsWith(`${desk}/`)) tombstones.delete(key);
+      }
       for (const view of views) {
         for (const key of [...listings[view].keys()]) {
           if (key.startsWith(`${desk}:`)) listings[view].delete(key);
@@ -1786,6 +1858,40 @@
       openFile(answer.path);
     });
 
+    // ---- deleting a version from history ------------------------------
+    let tombTarget = null;
+
+    function openTomb(path) {
+      if (!path || isNow(path)) return;
+      tombTarget = path;
+      el('hc-tomb-message').textContent =
+        `Delete ${clayText(path)} as of revision ${path[1]} of ` +
+        `%${path[0]}?  Clay discards the stored content of this version ` +
+        'wherever it is kept, so every revision and path holding the ' +
+        'same content shows it as tombstoned.  This cannot be undone.  ' +
+        'Clay refuses if any desk still uses this content now.';
+      tombDialog.open(el('hc-tomb-cancel'));
+    }
+
+    function closeTomb() {
+      tombTarget = null;
+      tombDialog.close();
+    }
+
+    async function acceptTomb() {
+      const path = tombTarget;
+      if (!path) return;
+      closeTomb();
+      try {
+        await api('tomb', {path}, `${base}/tomb`);
+      } catch (cause) {
+        runtime.notify(cause.message, {kind: 'error', sticky: true});
+        return;
+      }
+      runtime.notify(`Deleted ${clayText(path)} at revision ${path[1]}.`);
+      refreshDesk(path[0]);
+    }
+
     // ---- choosing a revision -----------------------------------------
     let revisionTarget = null;
 
@@ -1832,6 +1938,7 @@
     let attributesDialog;
     let uploadDialog;
     let revisionDialog;
+    let tombDialog;
     const runtime = window.urui.runtime({
       session: {
         read: (key) => (key === 'heathcliffTrees' ? trees : undefined),
@@ -1849,6 +1956,8 @@
             title: 'Attributes and permissions of this path'},
           {id: 'upload', label: 'Upload…',
             title: 'Upload a file into this directory'},
+          {id: 'tomb', label: 'Delete', danger: true,
+            title: 'Delete this version of the file from history'},
           {id: 'now', label: 'Now',
             title: 'Browse this desk at its current revision'},
           {id: 'revision', label: 'Revision…',
@@ -1860,12 +1969,14 @@
           const desk = revisions[target.view]?.get(target.path?.[0]);
           const many = (desk?.head || 1) > 1;
           return {
-            open: {hidden: !file},
-            download: {hidden: !file},
+            open: {hidden: !file, disabled: target.tomb},
+            download: {hidden: !file, disabled: target.tomb},
             attributes: {hidden: !file},
             'path-attributes': {hidden: file},
             upload: {hidden: file || !current},
-            delete: {hidden: !file, disabled: !current},
+            //  history is the only place a file is deleted from here
+            delete: {hidden: true},
+            tomb: {hidden: !file, disabled: current || target.tomb},
             now: {disabled: !many || desk.current() >= desk.head},
             revision: {disabled: !many}
           };
@@ -1876,6 +1987,7 @@
             openAttributes(target.path, target.entry);
           }
           else if (id === 'upload') startUpload(target.path);
+          else if (id === 'tomb') openTomb(target.path);
           else if (id === 'now') {
             const desk = revisions[target.view]?.get(target.path[0]);
             desk?.pick(desk.head);
@@ -1907,6 +2019,9 @@
     revisionDialog = runtime.dialogs.modal(el('hc-revision'), {
       close: closeRevision
     });
+    tombDialog = runtime.dialogs.modal(el('hc-tomb'), {close: closeTomb});
+    el('hc-tomb-cancel').addEventListener('click', closeTomb);
+    el('hc-tomb-ok').addEventListener('click', acceptTomb);
     el('hc-revision-cancel').addEventListener('click', closeRevision);
     el('hc-revision-ok').addEventListener('click', acceptRevision);
     el('hc-revision-input').addEventListener('keydown', (event) => {

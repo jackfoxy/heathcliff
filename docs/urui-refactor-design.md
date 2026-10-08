@@ -172,6 +172,7 @@ Browser, `lib/urui-js.hoon`:
 | `POST /heathcliff/api` | tree, attributes, permissions, crews, upload check |
 | `GET /heathcliff/raw/<desk>/<case>/<path>` | a file's export for previews; `?download` makes it an attachment |
 | `POST /heathcliff/upload/<desk>/now/<dir>` | multipart upload, verified |
+| `POST /heathcliff/tomb` | tombstone a file's content at an old revision (`%tomb %lobe`), answered after a `%wait` reads the tomb back |
 | `GET /heathcliff/favicon.png`, `/heathcliff/heathcliff.png` | icon, docket tile image |
 
 Old `/heathcliff/{view,edit,perm,down,load}/...` routes are removed with no

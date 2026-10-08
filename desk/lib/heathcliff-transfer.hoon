@@ -211,6 +211,49 @@
   ^-  [verify=wire write=wire timeout=wire]
   [/upload/[id]/verify /upload/[id]/write /upload/[id]/timeout]
 ::
+::  +|  Tombstones
+::
+::    Clay history is immutable: a file at an old revision can only lose
+::    its stored data.  %tomb discards a blob wherever it is used, and
+::    clay itself refuses, quietly, when any desk's current revision
+::    still uses it.  It sends no gift, so the result is read back on the
+::    next event, from a %wait whose wire carries the request.
+::
+++  tomb-plan
+  ::  The cards tombstoning the file at an old-revision wire path, or
+  ::  why not.
+  |=  [=bowl:gall eyre-id=@ta wire=path]
+  ^-  (each (list card:agent:gall) @t)
+  ?.  ?=([@ @ ^] wire)  [%| 'a path names its desk, revision and file']
+  ?:  =(%now i.t.wire)  [%| 'only a file at an older revision is deleted']
+  ?.  (~(has in (desks:hc bowl)) i.wire)  [%| 'no such desk']
+  =/  cas=(unit case)
+    (read-case:hc bowl i.t.wire (head-rev:hc bowl i.wire))
+  ?~  cas  [%| 'no such revision of that desk']
+  =/  full=path  (en-beam [our.bowl i.wire u.cas] t.t.wire)
+  =/  =arch  .^(arch %cy full)
+  ?~  fil.arch  [%| 'no file at that path in that revision']
+  ?.  (live:hc bowl full)  [%| 'that version is already tombstoned']
+  :-  %&
+  :~  [%pass /tomb/clay %arvo %c %tomb %lobe u.fil.arch]
+      [%pass [%tomb %check eyre-id full] %arvo %b %wait now.bowl]
+  ==
+::
+++  tomb-take
+  ::  The answer once clay has acted, from the %wait's wire.
+  |=  [=bowl:gall =wire =sign-arvo]
+  ^-  (unit (list card:agent:gall))
+  ?.  ?=([%tomb %check @ *] wire)  ~
+  ?.  ?=([%behn %wake *] sign-arvo)  `~
+  =/  eyre-id=@ta  i.t.t.wire
+  =/  full=path  t.t.t.wire
+  ?.  (live:hc bowl full)
+    `(reply:ufiles eyre-id (ok-json:ufiles ~))
+  :-  ~
+  %+  refuse:ufiles  eyre-id
+  %^  fail:ufiles  %in-use  409
+  'clay kept it: this content is still used by a desk\'s current revision'
+::
 ::  +|  Downloads
 ::
 ++  export

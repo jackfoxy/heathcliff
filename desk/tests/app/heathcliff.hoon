@@ -156,6 +156,14 @@
     (expect !>(!=(~ (find "\"entries\":[]" (trip (body out))))))
   ==
 ::
+++  test-perm-acks-are-quiet
+  ::  clay acks every %cred; the agent takes it without crashing
+  =/  ack=sign-arvo  [%clay %done ~]
+  =/  out  (on-arvo:~(. agent bol) /perm/cred ack)
+  =/  passed=(list card:agent:gall)
+    (skim -.out |=(=card:agent:gall ?=(%pass -.card)))
+  (expect-eq !>(`(list card:agent:gall)`~) !>(passed))
+::
 ++  test-api-refuses-bad-requests
   =/  send
     |=  text=@t

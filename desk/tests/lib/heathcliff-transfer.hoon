@@ -104,6 +104,18 @@
     (expect !>(=(~ next.out)))
   ==
 ::
+::  +|  Tombstones
+::
+++  test-tomb-take-ignores-other-signs
+  ::  Only a %wake on a /tomb/check wire is read back; that read needs a
+  ::  ship.
+  ;:  weld
+    (expect !>(=(~ (tomb-take:ht bowl /upload/x/verify [%behn %wake ~]))))
+    %+  expect-eq
+      !>(`(unit (list card:agent:gall))``~)
+    !>((tomb-take:ht bowl /tomb/check/req/zod (writ ~)))
+  ==
+::
 ::  +|  Downloads
 ::
 ++  test-filename

@@ -22,13 +22,19 @@ unsaved text, and which folders are open are remembered in this browser.
 
 **Apps** lists every desk on the ship, system desks included, each with
 its whole Clay tree. **Data** lists the same desks, by desk name, each as
-its `/data` directory: the row `%obelisk/data/` holds what is inside
-`/data` on `%obelisk`. A desk without one says so. Browsing never creates
-a `/data` directory.
+its data directory: the row `%obelisk` holds what is inside `/data` on
+`%obelisk`. When `/data` holds nothing but a folder named for the desk,
+as an app's own file root usually does (`/data/obelisk`), the row shows
+that folder's contents directly. A desk without `/data` says so. Browsing
+never creates a `/data` directory.
 
 Desks are sorted by their app name, ignoring case. The name comes from the
 desk's `desk.docket-0` title; a desk without one shows its desk name. When
 the two differ, the desk name follows in grey, as `%desk`.
+
+A file whose stored data has been tombstoned at the revision shown is
+listed as `name.mark (tombstoned)`; it cannot be opened, downloaded or
+deleted again, though File attributes… still works.
 
 Folders come before files, both sorted by name. A file shows as
 `name.mark`: Clay has no file extensions, so `/app/dojo/hoon` is the file
@@ -106,7 +112,8 @@ press Shift+F10 or the context-menu key:
 - **File attributes…** for a file, **Path attributes…** for a desk or
   folder.
 - **Upload…** into a desk or folder at now.
-- **Delete** a file at now. Heathcliff asks first.
+- **Delete** a file's version at an older revision (see below). Disabled
+  at now: Heathcliff does not delete current files.
 - **Now** and **Revision…**: browse the item's desk at now, or at a
   revision you choose.
 
@@ -145,6 +152,21 @@ Two limits come from Clay itself:
 - **Write rules are not enforced.** This kernel stores and inherits write
   rules but never checks them. Treat a write rule as a record, not as
   protection.
+
+## Deleting from history
+
+Clay's history cannot be rewritten: an old revision always lists its
+files. What can go is the stored content of a version. **Delete**, on a
+file opened at an older revision, tombstones that content after you
+confirm. Heathcliff then reloads the listing.
+
+- Clay stores identical content once, so every revision and path holding
+  exactly that content shows it as tombstoned afterwards.
+- Clay refuses, and Heathcliff reports it, when any desk's current
+  revision still uses that content.
+- It cannot be undone.
+
+Delete is disabled at now. To remove a current file, use the dojo.
 
 ## Uploading
 
