@@ -81,6 +81,7 @@
     %weba   `/audio/webm
     %mid    `/audio/midi
     %mp4    `/video/mp4
+    %mov    `/video/quicktime
     %webm   `/video/webm
     %ogv    `/video/ogg
     %mpeg   `/video/mpeg
@@ -106,7 +107,7 @@
   ^-  (list mark)
   :~  %aac  %atom  %avi  %bill  %bmp  %css  %csv  %docket-0  %flac  %gif
       %hoon  %html  %hymn  %ico  %jam  %jpeg  %jpg  %js  %json  %kelvin
-      %map  %md  %mid  %mp3  %mp4  %mpeg  %noun  %oga  %ogg  %ogv  %otf
+      %map  %md  %mid  %mov  %mp3  %mp4  %mpeg  %noun  %oga  %ogg  %ogv  %otf
       %pdf  %pem  %png  %ship  %snip  %story  %svg  %tab  %tiff  %ttf
       %txt  %udon  %umd  %urb  %wasm  %wav  %weba  %webm  %webp  %woff2
       %xml
@@ -122,7 +123,7 @@
   ^-  (list mark)
   :~  %aac  %atom  %avi  %bill  %bmp  %css  %csv  %docket-0  %flac  %gif
       %hoon  %html  %ico  %jpeg  %jpg  %js  %json  %kelvin  %map  %md
-      %mid  %mp3  %mp4  %mpeg  %oga  %ogg  %ogv  %otf  %pdf  %pem  %png
+      %mid  %mov  %mp3  %mp4  %mpeg  %oga  %ogg  %ogv  %otf  %pdf  %pem  %png
       %ship  %svg  %tab  %tiff  %ttf  %txt  %udon  %umd  %wav  %weba
       %webm  %webp  %woff2  %xml
   ==
@@ -133,7 +134,7 @@
   ::    Every other byte mark stores a bare atom, which has no high
   ::    zeros: its +grow recomputes the length with +met.
   ^-  (set mark)
-  (silt `(list mark)`~[%mime %otf %ttf %woff2])
+  (silt `(list mark)`~[%mime %mov %otf %ttf %woff2])
 ::
 ::  +|  Paths
 ::
@@ -357,7 +358,7 @@
         ?(%mp3 %wav %ogg %oga %flac %aac %weba %mid)
       (media mark stored "audio")
     ::
-        ?(%mp4 %webm %ogv %mpeg %avi)
+        ?(%mov %mp4 %webm %ogv %mpeg %avi)
       (media mark stored "video")
     ::
         %pdf
@@ -408,8 +409,14 @@
   ::  A summary line for a byte file whose preview the result pane draws.
   |=  [=mark stored=* kind=tape]
   ^-  wain
-  ?^  stored  (fallback mark stored)
-  :~  (crip "%{(trip mark)} {kind}, {(a-co:co (met 3 stored))} bytes.")
+  =/  size=(unit @ud)
+    ?@  stored  `(met 3 stored)
+    ?.  (~(has in octs-marks) mark)  ~
+    =/  bytes=(unit octs)  ((soft octs) stored)
+    ?~  bytes  ~
+    `p.u.bytes
+  ?~  size  (fallback mark stored)
+  :~  (crip "%{(trip mark)} {kind}, {(a-co:co u.size)} bytes.")
       'Its preview is in the result pane; Download saves the file.'
   ==
 ::

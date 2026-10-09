@@ -56,6 +56,7 @@
     (expect-eq !>(1) !>((lent (problems:ht %txt 10 1 0 0))))
     (expect-eq !>(`(list @t)`~) !>((problems:ht %ttf 10 2 0 0)))
     (expect-eq !>(`(list @t)`~) !>((problems:ht %mime 10 2 0 0)))
+    (expect-eq !>(`(list @t)`~) !>((problems:ht %mov 7.000 6.645 2 2)))
     ::  no conversion into marks without +grab mime
     (expect-eq !>(1) !>((lent (problems:ht %hymn 10 0 0 0))))
     (expect-eq !>(1) !>((lent (problems:ht %jam 10 0 0 0))))
@@ -124,6 +125,8 @@
     !>((filename:ht /a/photo/png [/image/png 1 'x']))
     %+  expect-eq  !>('blob.png')
     !>((filename:ht /a/blob/mime [/image/png 1 'x']))
+    %+  expect-eq  !>('movie.mov')
+    !>((filename:ht /a/movie/mime [/video/quicktime 7.000 'x']))
     %+  expect-eq  !>('blob.bin')
     !>((filename:ht /a/blob/mime [/application/x-weird 1 'x']))
     %+  expect-eq  !>('thing.jam')
@@ -133,7 +136,7 @@
   ==
 ::
 ++  test-raw
-  ::  An atom serves as stored; a structured noun has no raw form.
+  ::  Atoms and known octs marks serve as stored; other nouns do not.
   ;:  weld
     %+  expect-eq
       !>(`(unit mime)``[/image/png 3 'abc'])
@@ -141,6 +144,9 @@
     %+  expect-eq
       !>(`(unit mime)``[/application/octet-stream 1 'a'])
     !>((raw:ht %unknown 'a'))
+    %+  expect-eq
+      !>(`(unit mime)``[/video/quicktime 7.000 'abc'])
+    !>((raw:ht %mov [7.000 'abc']))
     (expect-eq !>(`(unit mime)`~) !>((raw:ht %noun [1 2])))
   ==
 ::

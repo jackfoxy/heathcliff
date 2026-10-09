@@ -23,7 +23,7 @@
       [%hymn %view]  [%ico %view]  [%jam %view]  [%jpeg %view]
       [%jpg %view]  [%js %cord]  [%json %json]  [%kelvin %mime]
       [%map %cord]  [%md %wain]  [%mid %view]  [%mime %view]
-      [%mp3 %view]  [%mp4 %view]  [%mpeg %view]  [%noun %view]
+      [%mov %view]  [%mp3 %view]  [%mp4 %view]  [%mpeg %view]  [%noun %view]
       [%oga %view]  [%ogg %view]  [%ogv %view]  [%otf %view]
       [%pdf %view]  [%pem %wain]  [%png %view]  [%ship %mime]
       [%snip %view]  [%svg %cord]  [%tab %wain]  [%tiff %view]
@@ -39,7 +39,7 @@
   (expect !>(edit-snapshots.policy))
 ::
 ++  test-every-mark-has-a-policy
-  ::  52 marks; an unknown mark is read-only too.
+  ::  53 marks; an unknown mark is read-only too.
   ::  wet +snoc and +weld here loop the type check (fuse-loop)
   =/  all=(list [mark=@tas codec=@tas])  [[%some-other-mark %view] marks]
   =/  policy=policy:ufiles  file-policy:web
@@ -51,7 +51,7 @@
     =/  want=(unit codec:ufiles)  `;;(codec:ufiles codec)
     =/  got=(unit codec:ufiles)  (file-codec:ufiles policy rel |)
     (expect-eq !>(want) !>(got))
-  =/  count=tang  (expect-eq !>(52) !>((lent marks)))
+  =/  count=tang  (expect-eq !>(53) !>((lent marks)))
   (zing `(list tang)`[count found])
 ::
 ++  test-text-marks-round-trip
@@ -76,6 +76,7 @@
     (expect !>(!(~(has in grabs:hc) %hymn)))
     (expect !>(!(~(has in grabs:hc) %noun)))
     (expect !>((~(has in octs-marks:hc) %woff2)))
+    (expect !>((~(has in octs-marks:hc) %mov)))
     (expect !>(!(~(has in octs-marks:hc) %png)))
   ==
 ::
@@ -160,6 +161,7 @@
 ::
 ++  test-inspect
   =/  font=@t  (inspect:hc %ttf [3 'abc'])
+  =/  movie=@t  (inspect:hc %mov [6.648 'abc'])
   =/  pic=@t  (inspect:hc %png 'abc')
   =/  env=@t  (inspect:hc %mime [/image/png 2 'AB'])
   =/  para=manx  ;p: hi
@@ -169,6 +171,8 @@
   =/  cell=@t  (inspect:hc %noun [1 2])
   =/  big=@t  (inspect:hc %noun (reap 100.000 %a))
   ;:  weld
+    %+  expect-eq  !>('%mov video, 6648 bytes.')
+    !>((snag 0 (to-wain:format movie)))
     %+  expect-eq
       !>('%ttf font, 3 bytes.\0aIts specimen is in the result pane.')
     !>(font)

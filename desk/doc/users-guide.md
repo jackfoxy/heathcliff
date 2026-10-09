@@ -195,18 +195,25 @@ Delete is disabled at now. To remove a current file, use the dojo.
 
 ## Uploading
 
-Select a folder or desk at now and press **Upload…** in the toolbar, or use
-**Upload…** in its item menu. Choose a file from your computer; cancelling
-the chooser does nothing.
+The toolbar **Upload…** opens a destination picker. Type a full path ending
+in a mark, such as `/base/data/notes/readme.md` or
+`/base/data/notes/readme/md`. Its desk tree starts at each desk's `/data/`
+or `/` according to Settings. Selecting desks, folders, and files fills the
+path progressively. You can type a new folder or filename and choose a
+different desk. Press **Choose file…** to select the local file. The
+destination's mark is checked before Upload is enabled.
+
+The **Upload…** context-menu action uses the selected desk or folder at
+now and immediately opens the local file chooser. It keeps the local
+filename and its mark. Cancelling the chooser does nothing.
 
 In **Settings → Apps uploads**, choose **Upload to /data/ in Apps**
 (the default) or **Upload to / in Apps**. This preference is saved in this
-browser. In Apps, the selected folder is relative to that prefix: selecting
+browser. For context-menu uploads in Apps, the selected folder is relative
+to that prefix: selecting
 the desk uploads to `/data/` or `/`, and selecting `/notes` uploads to
 `/data/notes` or `/notes`. A selected path already under `/data/` keeps that
 prefix once. Data view uploads stay in the selected Data directory.
-Selecting a file uses its containing folder; with nothing selected, the
-active file's folder is used.
 
 The file's extension becomes its mark: `photo.png` is stored as
 `/folder/photo/png` with mark `png`. Before anything is written, Heathcliff
@@ -220,6 +227,9 @@ shows where the file will go and anything that needs a decision:
 
 The upload is committed in one step, together with any marks it needs, and
 confirmed only once Clay reads it back intact. The file then opens in a tab.
+QuickTime `.mov` uploads preserve their full byte length, including trailing
+NUL bytes. They display video and MediaInfo attributes; playback depends on
+the browser's support for the movie's codecs.
 
 ### Marks Heathcliff copies into your desks
 

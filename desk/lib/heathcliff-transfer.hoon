@@ -284,10 +284,14 @@
   (raw mark .^(* %cq full))
 ::
 ++  raw
-  ::  An atom-shaped file served as it is stored.
+  ::  Known octs marks keep their length; bare atoms use their bit length.
   |=  [=mark dat=*]
   ^-  (unit mime)
-  ?^  dat  ~
+  ?^  dat
+    ?.  (~(has in octs-marks:hc) mark)  ~
+    =/  bytes=(unit octs)  ((soft octs) dat)
+    ?~  bytes  ~
+    `[(fall (ctype:hc mark) /application/octet-stream) u.bytes]
   `[(fall (ctype:hc mark) /application/octet-stream) (met 3 dat) dat]
 ::
 ++  payload
@@ -347,7 +351,7 @@
   =/  known=(list mark)
     :~  %png  %jpg  %gif  %svg  %webp  %bmp  %ico  %tiff  %txt  %html
         %css  %js  %json  %xml  %csv  %md  %pdf  %mp3  %wav  %ogg  %flac
-        %aac  %mp4  %webm  %mpeg  %ttf  %otf  %woff2  %wasm
+        %aac  %mov  %mp4  %webm  %mpeg  %ttf  %otf  %woff2  %wasm
     ==
   |-  ^-  (unit @ta)
   ?~  known  ~

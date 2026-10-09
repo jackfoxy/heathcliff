@@ -1,4 +1,4 @@
-::  Tests for /app/heathcliff: state upgrades and the HTTP boundary.
+::  Tests for /app/heathcliff: reloading and the HTTP boundary.
 ::
 ::    Only paths that refuse or answer before any clay scry are driven
 ::    here; the scrying routes need a real desk.
@@ -84,20 +84,13 @@
 ::
 ::  +|  State
 ::
-++  test-upgrades-keep-the-crew-mirror
-  ::  Every version loads; crews survive; pending writes never do; and
-  ::  the mirror is refreshed.
-  =/  zero  (load !>([%0 ~]))
-  =/  one  (load !>([%1 crews ~]))
+++  test-reload-keeps-the-crew-mirror
+  ::  Crews survive; pending writes never do; and the mirror is refreshed.
   =/  job  [~.e ~.i %save /base/now/a/txt `'x' ~2026.10.4]
-  =/  two  (load !>([%2 crews ~ `job ~]))
+  =/  out  (load !>([%0 crews ~ `job ~]))
   ;:  weld
-    (expect !>(=(saved.zero [%2 ~ ~ ~ ~])))
-    (expect !>(=(saved.one [%2 crews ~ ~ ~])))
-    (expect !>(=(saved.two [%2 crews ~ ~ ~])))
-    (expect-eq !>(~[mirror]) !>(cards.zero))
-    (expect-eq !>(~[mirror]) !>(cards.one))
-    (expect-eq !>(~[mirror]) !>(cards.two))
+    (expect !>(=(saved.out [%0 crews ~ ~ ~])))
+    (expect-eq !>(~[mirror]) !>(cards.out))
   ==
 ::
 ::  +|  HTTP

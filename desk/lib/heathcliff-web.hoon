@@ -241,8 +241,7 @@
         ;button#hc-upload-button
           =type   "button"
           =title
-            "Upload a file from this computer into the selected ".
-            "directory"
+            "Choose a destination and upload a file from this computer"
           Upload…
         ==
         ;+  settings-button:shell
@@ -368,6 +367,10 @@
   ^-  @t
   '''
   .hc-hidden { display: none; }
+  #hc-upload-path { box-sizing: border-box; width: 100%; }
+  .hc-upload-tree { max-height: 16rem; overflow: auto; margin: 0.5rem 0; }
+  .hc-upload-tree summary { cursor: pointer; padding: 0.2rem; }
+  .hc-upload-tree .hc-file { display: block; width: 100%; }
   .hc-tree { display: grid; gap: 0.1rem; padding: 0.25rem 0; }
   .hc-row {
     display: flex;
@@ -636,18 +639,6 @@
     function currentView() {
       return runtime.explorer.view() === 'data' ? 'data' : 'apps';
     }
-
-    //  The selected folder or desk; for a selected file, its folder;
-    //  with nothing selected, the active file's folder.  Only at now.
-    function uploadTarget() {
-      const target = selected[currentView()];
-      const tab = runtime.documents.active(store);
-      const dir = target
-        ? (target.entry === 'file' ? target.path.slice(0, -2) : target.path)
-        : tab?.path?.slice(0, -2);
-      return dir && isNow(dir) ? dir : null;
-    }
-
 
     function openMenu(view, source, event, target) {
       runtime.explorer.context.open(store, target.path, source, event, {
@@ -1070,7 +1061,7 @@
       'png', 'jpg', 'jpeg', 'gif', 'bmp', 'ico', 'tiff', 'webp'
     ]);
     const audio = new Set(['mp3', 'wav', 'ogg', 'oga', 'flac', 'aac', 'weba']);
-    const video = new Set(['mp4', 'webm', 'ogv', 'mpeg', 'avi']);
+    const video = new Set(['mov', 'mp4', 'webm', 'ogv', 'mpeg', 'avi']);
     const fonts = new Set(['otf', 'ttf', 'woff2']);
     const framed = new Set(['hymn', 'urb', 'snip']);
 
@@ -1867,9 +1858,153 @@
     let uploadDir = null;
     let uploadFile = null;
     let uploadPlan = null;
+    let uploadName = null;
+    let uploadPicker = null;
+    let uploadCheck = 0;
+    let uploadTimer;
+
+    function uploadDestination(value) {
+      const parts = value.trim().split('/');
+      if (parts[0] === '') parts.shift();
+      const leaf = parts.pop() || '';
+      const dot = leaf.lastIndexOf('.');
+      const mark = dot < 0 ? leaf : leaf.slice(dot + 1);
+      const name = dot < 0 ? parts.pop() : leaf.slice(0, dot);
+      if (!parts.length || !name || !/^[a-z0-9-]+$/.test(name)
+        || !/^[a-z][a-z0-9-]*$/.test(mark)
+        || parts.some(part => !/^[a-z0-9_~-]+$/.test(part))) {
+        throw new Error('Enter /desk/folder/name.mark with a valid mark.');
+      }
+      return {dir: [parts[0], 'now', ...parts.slice(1)],
+        filename: `${name}.${mark}`};
+    }
+
+    function uploadFilename(name) {
+      const dot = name.lastIndexOf('.');
+      if (dot < 0) return name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+      return name.slice(0, dot).toLowerCase().replace(/[^a-z0-9-]/g, '-')
+        + '.' + name.slice(dot + 1).toLowerCase();
+    }
+
+    function queueUploadCheck() {
+      uploadCheck += 1;
+      clearTimeout(uploadTimer);
+      uploadPlan = null;
+      el('hc-upload-confirm').disabled = true;
+      uploadPicker.details.replaceChildren();
+      uploadTimer = setTimeout(checkUpload, 250);
+    }
+
+    async function startUploadPicker() {
+      closeUpload();
+      uploadDir = null;
+      uploadName = null;
+      const field = make('input', {id: 'hc-upload-path', type: 'text',
+        placeholder: '/base/data/notes/readme.md', autocomplete: 'off',
+        spellcheck: 'false', 'aria-describedby': 'hc-upload-path-help'});
+      const choose = make('button', {type: 'button',
+        id: 'hc-upload-choose', text: 'Choose file…'});
+      const selectedFile = make('p', {class: 'hc-note', text: 'No file chosen.'});
+      const details = make('div');
+      const tree = make('div', {class: 'hc-upload-tree',
+        'aria-label': 'Upload destinations'});
+      const picker = {field, selectedFile, details};
+      uploadPicker = picker;
+      el('hc-upload-body').replaceChildren(
+        make('label', {for: field.id, text: 'Destination path'}), field,
+        make('p', {id: 'hc-upload-path-help', class: 'hc-note', text:
+          'Enter /desk/folder/name.mark or /desk/folder/name/mark. ' +
+          'Select a desk, folders, or a file below to fill the path.'}),
+        tree, choose, selectedFile, details);
+      el('hc-upload-confirm').disabled = true;
+      field.addEventListener('input', queueUploadCheck);
+      choose.addEventListener('click', () => {
+        uploadInput.value = '';
+        uploadInput.click();
+      });
+      uploadDialog.open(field);
+      const select = (path, filename) => {
+        let leaf = filename;
+        if (leaf === undefined) {
+          try { leaf = uploadDestination(field.value).filename; }
+          catch (_) { leaf = uploadFile ? uploadFilename(uploadFile.name) : ''; }
+        }
+        field.value = '/' + [...path, leaf].join('/');
+        queueUploadCheck();
+      };
+      const folder = (label, path, fill) => {
+        const node = make('details');
+        const summary = make('summary', {text: label});
+        const kids = make('div', {class: 'hc-kids'});
+        let built = false;
+        summary.addEventListener('click', () => select(path));
+        node.addEventListener('toggle', async () => {
+          if (!node.open || built) return;
+          built = true;
+          try { await fill(kids); }
+          catch (cause) {
+            built = false;
+            kids.replaceChildren(make('p', {class: 'hc-error', text: cause.message}));
+          }
+        });
+        node.append(summary, kids);
+        return node;
+      };
+      const branches = (host, desk, prefix, paths) => {
+        const dirs = new Set();
+        const leaves = [];
+        for (const path of paths) {
+          if (!prefix.every((part, i) => path[i] === part)) continue;
+          const rest = path.slice(prefix.length);
+          if (rest.length > 2) dirs.add(rest[0]);
+          else if (rest.length === 2) leaves.push(rest);
+        }
+        host.replaceChildren();
+        for (const dir of [...dirs].sort(byName)) {
+          const next = [...prefix, dir];
+          host.append(folder(dir, [desk, ...next], kids =>
+            branches(kids, desk, next, paths)));
+        }
+        for (const [name, mark] of leaves.sort((a, b) =>
+          byName(a.join('.'), b.join('.')))) {
+          const file = make('button', {type: 'button', class: 'hc-file',
+            text: `${name}.${mark}`});
+          file.addEventListener('click', () =>
+            select([desk, ...prefix], `${name}.${mark}`));
+          host.append(file);
+        }
+        if (!dirs.size && !leaves.length) {
+          host.append(make('p', {class: 'hc-note', text: 'Empty folder.'}));
+        }
+      };
+      const scope = appsUploadRoot === 'data' ? ['data'] : [];
+      try {
+        const answer = await api('roots');
+        if (uploadPicker !== picker) return;
+        for (const root of answer.roots) {
+          tree.append(folder(`%${root.desk} /${scope.join('/')}`,
+            [root.desk, ...scope], async kids => {
+              const listing = await api('tree', {
+                desk: root.desk, case: 'now', scope
+              });
+              if (uploadPicker === picker) {
+                branches(kids, root.desk, scope, listing.paths);
+              }
+            }));
+        }
+        if (!answer.roots.length) {
+          tree.append(make('p', {class: 'hc-note', text: 'No desks available.'}));
+        }
+      } catch (cause) {
+        if (uploadPicker === picker) {
+          tree.append(make('p', {class: 'hc-error', text: cause.message}));
+        }
+      }
+    }
 
     function startUpload(dir, view = currentView()) {
       if (!dir || !isNow(dir)) return;
+      closeUpload();
       uploadDir = view === 'apps' && appsUploadRoot === 'data'
         && dir[2] !== 'data'
         ? [...dir.slice(0, 2), 'data', ...dir.slice(2)] : [...dir];
@@ -1887,26 +2022,59 @@
       return count;
     }
 
-    uploadInput.addEventListener('change', async () => {
+    uploadInput.addEventListener('change', () => {
       const file = uploadInput.files?.[0];
-      if (!file || !uploadDir) return;
+      if (!file) return;
       uploadFile = file;
+      if (uploadPicker) {
+        uploadPicker.selectedFile.textContent = `${file.name}, ${file.size} bytes`;
+        if (uploadPicker.field.value.endsWith('/')) {
+          uploadPicker.field.value += uploadFilename(file.name);
+        }
+        queueUploadCheck();
+      } else {
+        uploadName = file.name;
+        checkUpload();
+      }
+    });
+
+    async function checkUpload() {
+      const check = ++uploadCheck;
+      const file = uploadFile;
+      uploadPlan = null;
+      el('hc-upload-confirm').disabled = true;
       let plan;
       try {
+        if (uploadPicker) {
+          const target = uploadDestination(uploadPicker.field.value);
+          uploadDir = target.dir;
+          uploadName = target.filename;
+          uploadPicker.field.setAttribute('aria-invalid', 'false');
+        }
+        if (!file || !uploadDir) return;
         plan = await api('upload-check', {
-          path: uploadDir, filename: file.name, size: file.size,
+          path: uploadDir, filename: uploadName, size: file.size,
           nul: await trailingNuls(file)
         });
       } catch (cause) {
-        runtime.notify(cause.message, {kind: 'error', sticky: true});
+        if (check !== uploadCheck) return;
+        if (uploadPicker) {
+          uploadPicker.field.setAttribute('aria-invalid', 'true');
+          uploadPicker.details.replaceChildren(make('p', {
+            class: 'hc-error', text: cause.message
+          }));
+        } else {
+          runtime.notify(cause.message, {kind: 'error', sticky: true});
+        }
         return;
       }
+      if (check !== uploadCheck) return;
       uploadPlan = plan;
       showUpload(file, plan);
-    });
+    }
 
     function showUpload(file, plan) {
-      const body = el('hc-upload-body');
+      const body = uploadPicker?.details || el('hc-upload-body');
       const parts = [facts([
         ['File', `${file.name}, ${file.size} bytes`],
         ['Into', `%${uploadDir[0]} /${uploadDir.slice(2).join('/')}`],
@@ -1936,11 +2104,18 @@
       }
       body.replaceChildren(...parts);
       el('hc-upload-confirm').disabled = plan.problems.length > 0;
-      uploadDialog.open(el(plan.problems.length
-        ? 'hc-upload-cancel' : 'hc-upload-confirm'));
+      if (!uploadPicker) {
+        uploadDialog.open(el(plan.problems.length
+          ? 'hc-upload-cancel' : 'hc-upload-confirm'));
+      }
     }
 
     function closeUpload() {
+      uploadCheck += 1;
+      clearTimeout(uploadTimer);
+      uploadPicker = null;
+      uploadName = null;
+      el('hc-upload-body').inert = false;
       uploadDialog.close();
       uploadFile = null;
       uploadPlan = null;
@@ -1948,7 +2123,7 @@
 
     el('hc-upload-cancel').addEventListener('click', closeUpload);
     el('hc-upload-confirm').addEventListener('click', async () => {
-      if (!uploadFile || !uploadPlan) return;
+      if (!uploadFile || !uploadPlan || uploadPlan.problems.length) return;
       const install = el('hc-upload-install')?.checked;
       const overwrite = el('hc-upload-overwrite')?.checked;
       if (uploadPlan.install.length && !install) {
@@ -1962,12 +2137,14 @@
         return;
       }
       const form = new FormData();
-      form.append('file', uploadFile, uploadFile.name);
+      form.append('file', uploadFile, uploadName);
       if (install) form.append('marks', '1');
       if (overwrite) form.append('overwrite', '1');
       const dir = uploadDir;
+      const check = uploadCheck;
       const button = el('hc-upload-confirm');
       button.disabled = true;
+      el('hc-upload-body').inert = true;
       let answer;
       try {
         const tail = dir.map((part) => encodeURIComponent(part)).join('/');
@@ -1976,12 +2153,15 @@
         });
         answer = await reply(response);
       } catch (cause) {
+        if (check !== uploadCheck) return;
         button.disabled = false;
+        el('hc-upload-body').inert = false;
         runtime.notify(cause.message, {
           kind: 'error', sticky: true, details: cause.details
         });
         return;
       }
+      if (check !== uploadCheck) return;
       closeUpload();
       runtime.notify(
         `Uploaded ${clayText(answer.path)} to %${answer.path[0]}.`);
@@ -2219,16 +2399,7 @@
       const path = runtime.documents.active(store)?.path;
       if (path) download(path);
     });
-    el('hc-upload-button').addEventListener('click', () => {
-      const dir = uploadTarget();
-      if (dir) {
-        startUpload(dir);
-        return;
-      }
-      runtime.notify('Select a folder or desk at now to upload into.', {
-        kind: 'error'
-      });
-    });
+    el('hc-upload-button').addEventListener('click', startUploadPicker);
     runtime.start((saved) => {
       trees = validTrees(saved?.heathcliffTrees);
       appsUploadRoot = saved?.['preferences.appsUploadRoot'] === 'root'

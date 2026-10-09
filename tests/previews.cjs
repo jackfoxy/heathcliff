@@ -15,6 +15,9 @@ const saves=[];
 let fileHead={text:'current contents',hash:'head-1'};
 const uploadChecks=[];
 const uploadPosts=[];
+const uploadBodies=[];
+let pickerRoots=false;
+const treeQueries=[];
 const rule={gist:'open',origin:'default',mode:'black',ships:[],crews:[]};
 const server=http.createServer(async(req,res)=>{
  const route=req.url.split('?')[0];
@@ -34,18 +37,25 @@ const server=http.createServer(async(req,res)=>{
   if(mark==='wav'||mark==='mime')return send('audio/wav',wav);
   if(mark==='png')return send('image/png',fs.readFileSync(root+'/desk/favicon.png'));
   if(mark==='webm')return send('video/webm',fs.readFileSync(path.join(__dirname, 'fixtures/sample.webm')));
+  if(mark==='mov')return send('video/quicktime',fs.readFileSync(path.join(__dirname, 'fixtures/sample.mov')));
   if(mark==='svg')return send('image/svg+xml','<svg xmlns="http://www.w3.org/2000/svg" width="40" height="30"/>');
   if(mark==='bad')return send('application/octet-stream','bad');
  }
  if(route.startsWith('/heathcliff/upload/')){
   uploadPosts.push(route);
-  req.resume();
+  const chunks=[];for await(const chunk of req)chunks.push(chunk);
+  uploadBodies.push(Buffer.concat(chunks).toString());
   return send('application/json',JSON.stringify({ok:false,error:{message:'Fixture stops before committing'}}));
  }
  if(route==='/heathcliff/api'||route==='/heathcliff/files'){
   const chunks=[];for await(const c of req)chunks.push(c);
   const data=JSON.parse(Buffer.concat(chunks));
-  if(data.op==='roots')return send('application/json',JSON.stringify({ok:true,roots:[]}));
+  if(data.op==='roots')return send('application/json',JSON.stringify({ok:true,roots:pickerRoots?[{desk:'base',title:'Base',rev:10},{desk:'other',title:'Other',rev:4}]:[]}));
+  if(data.op==='tree'){
+   treeQueries.push(data);
+   const paths=data.desk==='base'?[['data','notes','readme','md'],['data','picture','png'],['app','demo','hoon']]:[['data','docs','other','txt']];
+   return send('application/json',JSON.stringify({ok:true,paths:paths.filter(path=>data.scope.every((part,i)=>path[i]===part)),tombs:[]}));
+  }
   if(data.op==='load'){
    loads.push(data.path);
    if(data.path.at(-1)==='txt')return send('application/json',JSON.stringify({ok:true,...(data.path[1]==='now'?fileHead:{text:'historical contents',hash:'old-3'})}));
@@ -61,14 +71,16 @@ const server=http.createServer(async(req,res)=>{
   if(data.op==='rule'){changes.push(data);return send('application/json',JSON.stringify({ok:true}));}
   if(data.op==='upload-check'){
    uploadChecks.push(data);
-   return send('application/json',JSON.stringify({ok:true,clay:'/'+[...data.path.slice(2),'note','txt'].join('/'),mark:'txt',exists:false,install:[],problems:[]}));
+   const dot=data.filename.lastIndexOf('.'),name=data.filename.slice(0,dot),mark=data.filename.slice(dot+1);
+   if(name==='slow')await new Promise(resolve=>setTimeout(resolve,500));
+   return send('application/json',JSON.stringify({ok:true,clay:'/'+[...data.path.slice(2),name,mark].join('/'),mark,exists:name==='existing',install:[],problems:['txt','md','png'].includes(mark)?[]:['Unsupported mark: '+mark]}));
   }
   if(data.op==='markdown'){
    if(data.text==='slow')await new Promise(r=>setTimeout(r,200));
    return send('application/json',JSON.stringify(data.text==='failure'?{ok:false,error:{message:'bad markdown'}}:{ok:true,html:`<h1>${data.text}</h1>`}));
   }
   if(data.op==='attributes'){
-   const mark=data.path.at(-1),type=mark==='png'?'image/png':mark==='svg'?'image/svg+xml':mark==='webm'?'video/webm':'audio/wav';
+   const mark=data.path.at(-1),type=mark==='png'?'image/png':mark==='svg'?'image/svg+xml':mark==='webm'?'video/webm':mark==='mov'?'video/quicktime':'audio/wav';
    return send('application/json',JSON.stringify({ok:true,target:{kind:'file',label:'sample.'+mark,mark,ship:'~zod',desk:'base',title:'Base',case:data.path[1],clay:'/sample/'+mark},current:data.path[1]==='now',head:10,file:{size:100,type,tombstoned:data.path.includes('gone')},permissions:{read:rule,write:rule,enforced:{read:true,write:true},crews:[],explicit:{rows:[]}}}));
   }
  }
@@ -107,7 +119,7 @@ const bindings=[['urui','desk/sur/urui.hoon'],['dock','desk/sur/docket.hoon'],['
  const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(`http://127.0.0.1:${server.address().port}/heathcliff`);
  await page.waitForFunction(()=>window.hcTest);
- for(const [mark,expected] of [['wav','8000 Hz'],['webm','V_VP8'],['png','32 px'],['mime','PCM'],['svg','40 px']]){
+ for(const [mark,expected] of [['wav','8000 Hz'],['webm','V_VP8'],['mov','AVC'],['png','32 px'],['mime','PCM'],['svg','40 px']]){
   await page.evaluate(mark=>window.hcTest.openAttributes(['base','now','sample',mark],'file'),mark);
   await page.waitForFunction(()=>!document.querySelector('.hc-attributes:not([hidden]) .hc-attributes-body').textContent.includes('Reading file metadata'),null,{timeout:30000});
   const text=await page.locator('.hc-attributes:not([hidden]) .hc-attributes-body').innerText();console.log(`PASS ${mark} metadata`);
@@ -137,6 +149,13 @@ const bindings=[['urui','desk/sur/urui.hoon'],['dock','desk/sur/docket.hoon'],['
   assert.equal(await page.locator('.hc-attributes:not([hidden]) form').count(),0);
   assert.equal(await page.locator('.hc-attributes:not([hidden]) .hc-attributes-body section:last-child input, .hc-attributes:not([hidden]) .hc-attributes-body section:last-child select, .hc-attributes:not([hidden]) .hc-attributes-body section:last-child textarea').count(),0);
  }
+ await page.evaluate(async()=>{
+  const body=document.getElementById('result-view');
+  body.replaceChildren();
+  window.hcTest.renderers.mov({path:['base','now','sample','mov']},body);
+ });
+ await page.waitForFunction(()=>document.querySelector('#result-view video')?.readyState>=1);
+ assert.equal(await page.locator('#result-view video').evaluate(video=>video.videoWidth),32);
  await page.evaluate(async()=>{
 await window.hcTest.openAttributes(['base','now','gone','png'],'file')});
  assert(!(await page.locator('.hc-attributes:not([hidden]) .hc-attributes-body').innerText()).includes('Image attributes'));
@@ -280,18 +299,16 @@ const body=document.querySelector('#result-view');body.replaceChildren();await w
  await page.locator('#settings').click();
  assert(await page.getByRole('radio',{name:'Upload to /data/ in Apps',exact:true}).isChecked());
  await page.locator('#close-settings').click();
- const checkUpload = async (path, view, expected, toolbar=false, submit=false) => {
-   await page.evaluate(({path,view,toolbar}) => {
-     const {runtime,setSelected} = window.hcTest;
+ const checkUpload = async (path, view, expected, submit=false) => {
+   await page.evaluate(({path,view}) => {
+     const {runtime} = window.hcTest;
      const target = {path,entry:'directory',view};
      runtime.explorer.setView(view);
-     if(toolbar) setSelected(view,target);
-     else runtime.explorer.context.open('clay',path,
+     runtime.explorer.context.open('clay',path,
        document.getElementById(view+'-tab'),undefined,target);
-   },{path,view,toolbar});
+   },{path,view});
    const chooser = page.waitForEvent('filechooser');
-   if(toolbar) await page.locator('#hc-upload-button').click();
-   else await page.getByRole('menuitem',{name:'Upload…',exact:true}).click();
+   await page.getByRole('menuitem',{name:'Upload…',exact:true}).click();
    await (await chooser).setFiles({name:'note.txt',mimeType:'text/plain',buffer:Buffer.from('hello')});
    await page.locator('#hc-upload').waitFor({state:'visible'});
    assert.deepEqual(uploadChecks.at(-1).path,expected);
@@ -303,7 +320,7 @@ const body=document.querySelector('#result-view');body.replaceChildren();await w
    }
    await page.locator('#hc-upload-cancel').click();
  };
- await checkUpload(['base','now'],'apps',['base','now','data'],true);
+ await checkUpload(['base','now'],'apps',['base','now','data']);
  await checkUpload(['base','now','notes'],'apps',['base','now','data','notes']);
  await checkUpload(['base','now','data','notes'],'apps',['base','now','data','notes']);
  await checkUpload(['base','now','data','notes'],'data',['base','now','data','notes']);
@@ -311,8 +328,8 @@ const body=document.querySelector('#result-view');body.replaceChildren();await w
  await page.getByRole('radio',{name:'Upload to / in Apps',exact:true}).check();
  await page.locator('#close-settings').click();
  await checkUpload(['base','now'],'apps',['base','now']);
- await checkUpload(['base','now','notes'],'apps',['base','now','notes'],true,true);
- await checkUpload(['base','now','data','notes'],'data',['base','now','data','notes'],true);
+ await checkUpload(['base','now','notes'],'apps',['base','now','notes'],true);
+ await checkUpload(['base','now','data','notes'],'data',['base','now','data','notes']);
  await page.evaluate(()=>window.hcTest.runtime.session.save());
  await page.reload();
  await page.waitForFunction(()=>window.hcTest);
@@ -331,6 +348,60 @@ const body=document.querySelector('#result-view');body.replaceChildren();await w
  assert(await page.getByRole('radio',{name:'Upload to /data/ in Apps',exact:true}).isChecked());
  await page.locator('#close-settings').click();
  console.log('PASS Apps upload defaults, paths, Data isolation, and persistence');
+ pickerRoots=true;
+ await page.locator('#hc-upload-button').click();
+ await page.locator('#hc-upload').waitFor({state:'visible'});
+ const destination=page.locator('#hc-upload-path');
+ assert.equal(await destination.inputValue(),'');
+ await page.locator('.hc-upload-tree summary').filter({hasText:'%base /data'}).click();
+ assert.equal(await destination.inputValue(),'/base/data/');
+ await page.locator('.hc-upload-tree summary').filter({hasText:/^notes$/}).click();
+ assert.equal(await destination.inputValue(),'/base/data/notes/');
+ await page.locator('.hc-upload-tree').getByRole('button',{name:'readme.md',exact:true}).click();
+ assert.equal(await destination.inputValue(),'/base/data/notes/readme.md');
+ assert.deepEqual(treeQueries.at(-1),{op:'tree',desk:'base',case:'now',scope:['data']});
+ const chooser=page.waitForEvent('filechooser');
+ await page.locator('#hc-upload-choose').click();
+ await (await chooser).setFiles({name:'local.txt',mimeType:'text/plain',buffer:Buffer.from('hello')});
+ await page.waitForFunction(()=>!document.getElementById('hc-upload-confirm').disabled);
+ assert.equal(uploadChecks.at(-1).filename,'readme.md');
+ await destination.fill('/base/data/no-mark/');
+ await page.waitForFunction(()=>document.getElementById('hc-upload-path').getAttribute('aria-invalid')==='true');
+ assert(await page.locator('#hc-upload-confirm').isDisabled());
+ await destination.fill('/base/data/name.unsupported');
+ await page.locator('#hc-upload-body').getByText('Unsupported mark: unsupported',{exact:true}).waitFor();
+ assert(await page.locator('#hc-upload-confirm').isDisabled());
+ await destination.fill('/base/../bad.txt');
+ await page.waitForFunction(()=>document.getElementById('hc-upload-path').getAttribute('aria-invalid')==='true');
+ assert(await page.locator('#hc-upload-confirm').isDisabled());
+ const slowRequest=page.waitForRequest(request=>request.url().endsWith('/api')&&request.postDataJSON()?.filename==='slow.txt');
+ const slowResponse=page.waitForResponse(response=>response.url().endsWith('/api')&&response.request().postDataJSON()?.filename==='slow.txt');
+ await destination.fill('/base/data/slow.txt');
+ await slowRequest;
+ await destination.fill('/base/data/');
+ await slowResponse;
+ assert(await page.locator('#hc-upload-confirm').isDisabled());
+ await destination.fill('/other/data/new-folder/renamed/txt');
+ await page.waitForFunction(()=>!document.getElementById('hc-upload-confirm').disabled);
+ assert.deepEqual(uploadChecks.at(-1).path,['other','now','data','new-folder']);
+ assert.equal(uploadChecks.at(-1).filename,'renamed.txt');
+ const sent=page.waitForResponse(response=>response.url().includes('/heathcliff/upload/'));
+ await page.locator('#hc-upload-confirm').click();
+ await sent;
+ assert.equal(uploadPosts.at(-1),'/heathcliff/upload/other/now/data/new-folder');
+ assert(uploadBodies.at(-1).includes('filename="renamed.txt"'));
+ await page.locator('#hc-upload-cancel').click();
+ await page.locator('#settings').click();
+ await page.getByRole('radio',{name:'Upload to / in Apps',exact:true}).check();
+ await page.locator('#close-settings').click();
+ await page.locator('#hc-upload-button').click();
+ await page.locator('.hc-upload-tree summary').filter({hasText:/^%base \/$/}).click();
+ assert.equal(await destination.inputValue(),'/base/');
+ await page.locator('.hc-upload-tree summary').filter({hasText:/^app$/}).click();
+ assert.equal(await destination.inputValue(),'/base/app/');
+ assert.deepEqual(treeQueries.at(-1).scope,[]);
+ await page.locator('#hc-upload-cancel').click();
+ console.log('PASS toolbar upload destination tree, both settings, mark validation, stale checks, and renamed multipart upload');
  console.log('Browser assertions passed',errors);assert.deepEqual(errors,[]);
  }finally{await browser.close();server.close();fs.rmSync(cache,{recursive:true,force:true});}
 })().catch(e=>{console.error(e);server.close();fs.rmSync(cache,{recursive:true,force:true});process.exitCode=1});

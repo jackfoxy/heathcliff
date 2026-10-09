@@ -28,22 +28,17 @@
 |%
 ::  +|  State
 ::
-::    state-0: posts pending a response; never written in practice.
-::    state-1: the crew mirror (see /lib/heathcliff-perm).
-::    state-2: the mirror, and the one file change and one upload that
-::             await clay.  Neither pending change is saved: an in-flight
-::             request does not survive a reload.
+::    The crew mirror (see /lib/heathcliff-perm), and the one file change
+::    and one upload that await clay.  Neither pending change is saved: an
+::    in-flight request does not survive a reload.
 ::
-+$  state-0  [%0 pend=(map @ta *)]
-+$  state-1  [%1 cez=crews:hp use=usage:hp]
-+$  state-2
-  $:  %2
++$  state-0
+  $:  %0
       cez=crews:hp
       use=usage:hp
       files=(unit pending:ufiles)
       load=(unit pending:ht)
   ==
-+$  versioned-state  $%(state-0 state-1 state-2)
 +$  card  card:agent:gall
 ::
 ::  +|  Assets
@@ -173,7 +168,7 @@
   [cards.done next.done]
 --
 ::
-=|  state-2
+=|  state-0
 =*  state  -
 ::
 %-  agent:dbug
@@ -191,17 +186,11 @@
 ++  on-save  !>(state(files ~, load ~))
 ::
 ++  on-load
-  ::  Every version keeps its crew mirror, if it has one, and refreshes it.
+  ::  The crew mirror is kept and refreshed.
   |=  ole=vase
   ^-  (quip card _this)
-  =/  old=versioned-state  !<(versioned-state ole)
-  =/  new=state-2
-    ?-  -.old
-      %0  [%2 ~ ~ ~ ~]
-      %1  [%2 cez.old use.old ~ ~]
-      %2  old(files ~, load ~)
-    ==
-  [mirror:hp this(state new)]
+  =/  old=state-0  !<(state-0 ole)
+  [mirror:hp this(state old(files ~, load ~))]
 ::
 ++  on-poke
   |=  [=mark =vase]
