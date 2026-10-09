@@ -4,6 +4,28 @@ Running log of every change to urui-owned files made during the Heathcliff
 refactor, for the separate urui update project. Base: urui `e42e17b`.
 Nothing here is committed in urui, graph-viz, or obelisk.
 
+## Heathcliff reference attributes
+
+Heathcliff's vendored `urui-js.hoon` now supports two optional consumer hooks:
+`options.documents[store].label(tab)` supplies an exact tab label, bypassing
+directory disambiguation; `options.refs[kind].dispose(ref)` releases resources
+when a reference tab closes. Existing consumers retain the default behavior.
+These hooks have not been propagated to the sibling urui checkout.
+
+Historical editing adds `options.documents[store].beforeSave(tab, {path})`:
+return `false` to cancel, or `{path, base}` to redirect a save with a conflict
+token. Errors use the normal save failure path. The file policy adds
+`edit-snapshots` (default false), enabled by Heathcliff to load editable text
+copies. Writes and deletes to historical locations remain forbidden; only
+the load path relaxes the editor's read-only flag. Codec inspection fallbacks
+remain read-only.
+
+`stored` now queries Clay's global `/tomb` endpoint at the bowl's current
+time, while retaining the requested revision in the nested file beam.
+Using the file revision on the outer, deskless endpoint caused `bail: 4`
+when opening historical files. Virtual-scry regressions cover current and
+historical text, historical tombstones, and read-only inspection.
+
 ## Files changed in `~/gitrepos/urui`
 
 | File | Change |

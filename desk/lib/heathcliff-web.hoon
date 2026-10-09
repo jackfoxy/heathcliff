@@ -2,7 +2,7 @@
 ::
 ::    urui owns the frame, panes, tabs, editor, file lifecycle, menus and
 ::    dialogs.  Heathcliff draws the Apps and Data trees into the views
-::    urui seeds, renders the result pane, and runs the attributes and
+::    urui seeds, renders the result pane and attribute reference tabs, and runs
 ::    upload dialogs on urui's modal controller.
 ::
 /-  urui
@@ -68,11 +68,12 @@
   ^-  policy:ufiles
   =/  made=policy:ufiles  (make-policy:ufiles files ~ |)
   %=  made
-    codecs     codecs:hc
-    fallback   `%view
-    locate     `locate:hc
-    view       `inspect:hc
-    max-bytes  (add limit:hc 65.536)
+    codecs         codecs:hc
+    fallback       `%view
+    locate         `locate:hc
+    view           `inspect:hc
+    edit-snapshots  &
+    max-bytes      (add limit:hc 65.536)
   ==
 ::
 ++  slots
@@ -91,6 +92,7 @@
       ['preferences.theme' %urui %scalar ~]
       ['preferences.layout' %urui %scalar ~]
       ['preferences.keybindings' %urui %scalar ~]
+      ['preferences.appsUploadRoot' %app %scalar ~]
   ==
 ::
 ++  shortcuts
@@ -211,8 +213,7 @@
       label='Result'
       mode=%read-only
       kind=~
-      :~  (pinned %head [%heading `'Result' `'result-status' ~])
-          %+  pinned  %body
+      :~  %+  pinned  %body
           :^  %panel  'result-body'  ~
           :~  ;div#result-view.hc-result(aria-live "polite");
           ==
@@ -227,10 +228,16 @@
   ==
 ::
 ++  toolbar
+  ::  File transfers sit left of Settings, so this toolbar places
+  ::  urui's Settings button itself.
   ^-  marl
-  ::  Upload… sits left of Settings, so the toolbar places urui's
-  ::  Settings button itself.
   :~  ;nav.toolbar(aria-label "Heathcliff controls")
+        ;button#hc-download-button
+          =type      "button"
+          =title     "Download the active file at its selected revision"
+          =disabled  ""
+          Download…
+        ==
         ;button#hc-upload-button
           =type   "button"
           =title
@@ -244,27 +251,9 @@
   ==
 ::
 ++  dialogs
-  ::  The attributes and upload dialogs, and the file input Upload uses.
+  ::  Upload and confirmation dialogs, and the file input Upload uses.
   ^-  marl
-  :~  ;aside#hc-attributes.help-panel
-        =hidden           ""
-        =role             "dialog"
-        =aria-modal       "true"
-        =aria-labelledby  "hc-attributes-title"
-        ;div.help-card.hc-dialog-card
-          ;div.pane-header
-            ;h2#hc-attributes-title: Attributes
-            ;button#hc-attributes-close
-              =type        "button"
-              =title       "Close file attributes"
-              =aria-label  "Close file attributes"
-              ; ×
-            ==
-          ==
-          ;div#hc-attributes-body.hc-dialog-body;
-        ==
-      ==
-      ;aside#hc-upload.help-panel
+  :~  ;aside#hc-upload.help-panel
         =hidden           ""
         =role             "dialog"
         =aria-modal       "true"
@@ -342,7 +331,7 @@
         ;p: A desk's revision box browses an older revision, read-only.
         ;p
           ; Right-click an item, or use its … button, for Download,
-          ; File or Path attributes…, Upload… and Delete.
+          ; Attributes…, Permissions…, Upload… and Delete.
         ==
         ;h3: Keyboard
         ;ul.shortcut-list
@@ -503,6 +492,13 @@
     max-height: 90vh;
     overflow: auto;
   }
+  .hc-attributes { overflow: auto; padding: 0.75rem; }
+  .hc-attributes h2 { font-size: 1rem; overflow-wrap: anywhere; }
+  .hc-attributes .hc-attributes-body dl { grid-template-columns: minmax(0, 1fr); }
+  .hc-attributes .hc-attributes-body dd { margin-bottom: 0.4rem; }
+  .hc-attributes input, .hc-attributes textarea, .hc-attributes select {
+    min-width: 0; max-width: 100%; box-sizing: border-box;
+  }
   .hc-dialog-body { display: grid; gap: 0.75rem; }
   .hc-dialog-body section { display: grid; gap: 0.4rem; }
   .hc-dialog-body h3 { margin: 0.25rem 0 0; font-size: 1rem; }
@@ -598,6 +594,7 @@
     //  Per view: the case each desk is browsed at and the open
     //  directories, persisted; and the listing of each desk and case.
     let trees = {apps: {cases: {}, open: {}}, data: {cases: {}, open: {}}};
+    let appsUploadRoot = 'data';
     const listings = {apps: new Map(), data: new Map()};
     //  wire paths, joined, of files whose data is tombstoned
     const tombstones = new Set();
@@ -787,6 +784,11 @@
 
     const fileLabel = (path) => {
       return `${path[path.length - 2]}.${path[path.length - 1]}`;
+    };
+
+    const fileTabLabel = (path) => {
+      const label = fileLabel(path);
+      return isNow(path) ? label : `${label} version ${path[1]}`;
     };
 
     //  a tombstoned file is listed, marked, and cannot be opened
@@ -1043,8 +1045,11 @@
     let renderTimer;
     let fontFace;
     let objectUrl;
+    let markdownRequest;
 
     function cleanResult() {
+      markdownRequest?.abort();
+      markdownRequest = undefined;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       objectUrl = undefined;
       if (fontFace) document.fonts?.delete?.(fontFace);
@@ -1077,6 +1082,7 @@
       const host = el('result-view');
       if (!host) return;
       const tab = runtime.documents.active(store);
+      el('hc-download-button').disabled = !tab?.path;
       if (!tab) {
         host.replaceChildren(make('p', {
           class: 'hc-note', text: 'Open a file from Apps or Data.'
@@ -1101,11 +1107,6 @@
       }
       if (dirty) {
         head.append(make('span', {class: 'hc-badge', text: 'unsaved buffer'}));
-      }
-      if (path) {
-        const button = make('button', {type: 'button', text: 'Download'});
-        button.addEventListener('click', () => download(path));
-        head.append(button);
       }
       const body = make('div', {class: 'hc-result-body'});
       host.replaceChildren(head, body);
@@ -1142,15 +1143,6 @@
 
     function noted(body, text) {
       body.append(make('p', {class: 'hc-note', text}));
-    }
-
-    function unavailable(body, tab, why) {
-      noted(body, why);
-      if (tab.path) {
-        const button = make('button', {type: 'button', text: 'Download'});
-        button.addEventListener('click', () => download(tab.path));
-        body.append(button);
-      }
     }
 
     function table(body, rows) {
@@ -1264,7 +1256,7 @@
       });
       node.addEventListener('error', () => {
         node.remove();
-        unavailable(body, tab, 'This browser cannot play this file.');
+        noted(body, 'This browser cannot play this file.');
       });
       body.append(node);
     }
@@ -1320,10 +1312,42 @@
       tab: (tab, body) => table(body, tab.text.split(NL)
         .filter((line, index, all) => line !== '' || index < all.length - 1)
         .map((line) => line.split(TAB))),
-      md: (tab, body) => {
-        const previewer = runtime.documents.previews.get('md');
-        if (previewer?.render) previewer.render(body, tab.text);
-        else source(body, tab.text);
+      md: async (tab, body, live) => {
+        const controller = new AbortController();
+        markdownRequest = controller;
+        const status = make('p', {class: 'hc-note', text: 'Rendering…'});
+        body.append(status);
+        try {
+          let text = tab.text;
+          if (tab.readonly && tab.path) {
+            const stored = await fetch(rawUrl(tab.path), {
+              credentials: 'same-origin', signal: controller.signal
+            });
+            if (!stored.ok) throw new Error('Unable to read Markdown source');
+            text = await stored.text();
+            if (!live()) return;
+          }
+          const response = await fetch(`${base}/api`, {
+            method: 'POST', credentials: 'same-origin',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({op: 'markdown', text}),
+            signal: controller.signal
+          });
+          const answer = await response.json();
+          if (!live()) return;
+          if (!response.ok || !answer.ok) {
+            throw new Error(answer.error?.message || 'Markdown render failed');
+          }
+          const view = make('div', {class: 'markdown-view'});
+          // The server restricts the Sail tree before serializing it.
+          view.innerHTML = answer.html;
+          body.replaceChildren(view);
+        } catch (cause) {
+          if (!live() || controller.signal.aborted) return;
+          status.remove();
+          failed(body, cause);
+          source(body, tab.text);
+        }
       },
       html: (tab, body) => {
         const previewer = runtime.documents.previews.get('html');
@@ -1418,7 +1442,7 @@
         }));
       },
       mid: (tab, body) => {
-        unavailable(body, tab,
+        noted(body,
           'Browsers have no native MIDI playback; download it to play.');
       },
       mime: (tab, body) => {
@@ -1435,7 +1459,7 @@
           || type.includes('json')) {
           framedRaw(body, tab.path, `Stored ${type}`);
         } else {
-          unavailable(body, tab, `No preview for ${type || 'this type'}.`);
+          noted(body, `No preview for ${type || 'this type'}.`);
           source(body, tab.text);
         }
       },
@@ -1449,7 +1473,7 @@
         });
         image.addEventListener('error', () => {
           image.remove();
-          unavailable(body, tab, 'This browser cannot display this image.');
+          noted(body, 'This browser cannot display this image.');
         });
         body.append(image);
       };
@@ -1468,38 +1492,128 @@
     }
 
     // ---- file attributes -------------------------------------------------
-    let attributesTarget = null;
-    const attributesModal = el('hc-attributes');
+    const attributeTargets = new Map();
 
-    function closeAttributes() {
-      attributesTarget = null;
-      attributesDialog.close();
-    }
-
-    async function openAttributes(path, entry) {
-      attributesTarget = {path, entry};
-      el('hc-attributes-body').replaceChildren(make('p', {
-        class: 'hc-note', text: 'Loading…'
-      }));
-      attributesDialog.open(el('hc-attributes-close'));
-      await loadAttributes();
-    }
-
-    async function loadAttributes() {
-      const target = attributesTarget;
+    function disposeAttributes(ref) {
+      const target = attributeTargets.get(ref.id);
       if (!target) return;
+      target.stop();
+      const tab = el(`${ref.id}-tab`);
+      if (tab) tab.ondblclick = null;
+      attributeTargets.delete(ref.id);
+    }
+
+    async function openAttributes(path, entry, kind = 'attributes') {
+      const ref = runtime.explorer.refs.open({
+        kind, parentId: JSON.stringify(path), path, entry
+      });
+      await attributeTargets.get(ref.id)?.pending;
+    }
+
+    function mountAttributes(panel, ref) {
+      disposeAttributes(ref);
+      panel.classList.add('hc-attributes');
+      panel.dataset.details = ref.kind;
+      const heading = ref.kind === 'permissions' ? 'Permissions' : 'Attributes';
+      el(`${ref.id}-tab`).title = `${heading}: ${ref.label}`;
+      const title = make('h2', {text: heading});
+      const body = make('div', {class: 'hc-dialog-body hc-attributes-body'});
+      panel.append(title, body);
+      const target = {
+        ...ref.data, ref, title, body, generation: 0, stop: () => {}
+      };
+      attributeTargets.set(ref.id, target);
+      el(`${ref.id}-tab`).ondblclick = async () => {
+        await target.pending;
+        if (attributeTargets.get(ref.id) === target && target.openable) {
+          openFile(target.path);
+        }
+      };
+      body.append(make('p', {class: 'hc-note', text: 'Loading…'}));
+      target.pending = loadAttributes(target);
+    }
+
+    async function loadAttributes(target) {
+      if (attributeTargets.get(target.ref.id) !== target) return;
+      const generation = ++target.generation;
+      target.openable = false;
+      target.stop();
+      const live = () => attributeTargets.get(target.ref.id) === target
+        && generation === target.generation;
       let answer;
       try {
         answer = await api('attributes', {path: target.path});
       } catch (cause) {
-        if (attributesTarget !== target) return;
-        el('hc-attributes-body').replaceChildren(make('p', {
+        if (!live()) return;
+        target.body.replaceChildren(make('p', {
           class: 'hc-note hc-error', text: cause.message
         }));
         return;
       }
-      if (attributesTarget !== target) return;
+      if (!live()) return;
       renderAttributes(target, answer);
+    }
+
+    function mediaAttributes(target, answer, body) {
+      if (!answer.file || answer.file.tombstoned) return;
+      const mark = answer.target.mark;
+      const type = answer.file.type || '';
+      const image = images.has(mark) || mark === 'svg' || type.startsWith('image/');
+      if (!image && !audio.has(mark) && !video.has(mark)
+        && mark !== 'mid' && mark !== 'mime') return;
+      const section = make('section');
+      section.append(make('h3', {
+        text: image ? 'Image attributes (read-only)' : 'Codec attributes (read-only)'
+      }));
+      const status = make('p', {class: 'hc-note', text: 'Reading file metadata…'});
+      section.append(status);
+      body.append(section);
+      let worker;
+      let picture;
+      let timer;
+      let stopped = false;
+      const stop = () => {
+        stopped = true;
+        clearTimeout(timer);
+        worker?.terminate();
+        if (picture) {
+          picture.onload = picture.onerror = null;
+          picture.removeAttribute('src');
+        }
+      };
+      target.stop = stop;
+      const finish = (groups, error) => {
+        if (stopped || attributeTargets.get(target.ref.id) !== target || !section.isConnected) return;
+        stop();
+        status.remove();
+        for (const group of groups) {
+          section.append(make('h4', {text: group.title}), facts(group.fields));
+        }
+        if (error) noted(section, error);
+        if (!groups.length && !error) {
+          noted(section, 'No readable metadata was found for this format.');
+        }
+      };
+      timer = setTimeout(() => finish([], 'Metadata inspection timed out.'), 20000);
+      // SVG is decoded as an image, never inserted as active markup.
+      if (mark === 'svg' || type.split(';')[0] === 'image/svg+xml') {
+        picture = new Image();
+        picture.onload = () => finish([{title: 'SVG', fields: [
+          ['Width', `${picture.naturalWidth} px`],
+          ['Height', `${picture.naturalHeight} px`]
+        ]}]);
+        picture.onerror = () => finish([], 'This image could not be decoded.');
+        picture.src = rawUrl(target.path);
+        return;
+      }
+      try {
+        worker = new Worker(`${base}/media-worker.js`, {type: 'module'});
+        worker.onmessage = ({data}) => finish(data.groups || [], data.error);
+        worker.onerror = () => finish([], 'Unable to read this file’s metadata.');
+        worker.postMessage({url: rawUrl(target.path)});
+      } catch (cause) {
+        finish([], 'Metadata inspection is unavailable in this browser.');
+      }
     }
 
     function facts(pairs) {
@@ -1512,7 +1626,7 @@
       return list;
     }
 
-    function ruleSection(name, rule, side, current, enforced) {
+    function ruleSection(target, name, rule, side, current, enforced) {
       const section = make('section');
       section.append(make('h3', {text: `${name}: ${rule.gist}`}));
       const origins = {
@@ -1561,9 +1675,9 @@
         make('div', {class: 'hc-actions'}, set, clear)
       );
       const send = (cleared) => change('rule', {
-        path: attributesTarget.path, side, clear: cleared,
+        path: target.path, side, clear: cleared,
         mode: mode.value, ships: ships.value, crews: crews.value
-      });
+      }, target);
       form.addEventListener('submit', (event) => {
         event.preventDefault();
         send(false);
@@ -1573,7 +1687,7 @@
       return section;
     }
 
-    function crewsSection(perms, current) {
+    function crewsSection(target, perms, current) {
       const section = make('section');
       section.append(make('h3', {text: 'Crews'}));
       section.append(make('p', {class: 'hc-note', text:
@@ -1597,7 +1711,7 @@
               const ok = await runtime.confirm('delete', {
                 path: `crew %${crew.name}`
               });
-              if (ok) change('crew-kill', {name: crew.name});
+              if (ok) change('crew-kill', {name: crew.name}, target);
             });
             cell.append(kill);
           }
@@ -1630,14 +1744,14 @@
           event.preventDefault();
           change('crew-save', {
             name: name.value.trim(), members: members.value
-          });
+          }, target);
         });
         section.append(form);
       }
       const reload = make('button', {
         type: 'button', text: 'Reload crews from clay'
       });
-      reload.addEventListener('click', () => change('reload', {}));
+      reload.addEventListener('click', () => change('reload', {}, target));
       section.append(make('div', {class: 'hc-actions'}, reload));
       return section;
     }
@@ -1664,7 +1778,7 @@
           `More than ${perms.explicit.walk} paths sit here; only the first ` +
           `${perms.explicit.walk} were checked, so rules below may be ` +
           'missing.  ' +
-          'Open attributes further down to see them.'}));
+          'Open Permissions further down to see them.'}));
       }
       noted(section,
         'A rule on a path with no files under it cannot be discovered.');
@@ -1672,11 +1786,14 @@
     }
 
     function renderAttributes(target, answer) {
-      const body = el('hc-attributes-body');
+      const body = target.body;
       const t = answer.target;
+      target.openable = t.kind === 'file' && !answer.file?.tombstoned;
       const current = answer.current;
       const noun = t.kind === 'file' ? 'File' : 'Path';
-      el('hc-attributes-title').textContent = `${noun} attributes: ${t.label}`;
+      const permissions = target.ref.kind === 'permissions';
+      target.title.textContent = permissions
+        ? `Permissions: ${t.label}` : `${noun} attributes: ${t.label}`;
       const identity = make('section');
       identity.append(make('h3', {text: 'Identity'}));
       identity.append(facts([
@@ -1690,6 +1807,23 @@
         ['Mark', t.mark ? `%${t.mark}` : null]
       ]));
       const parts = [identity];
+      if (permissions) {
+        const perms = answer.permissions;
+        const header = make('section');
+        header.append(make('h3', {text: 'Permissions'}));
+        noted(header, current
+          ? 'Clay keeps current rules only.'
+          : 'Clay keeps current rules only: these are as of now, not of this ' +
+            'revision, and cannot be changed from a historical revision.');
+        parts.push(header,
+          ruleSection(target, 'Read', perms.read, 'read', current, perms.enforced.read),
+          ruleSection(target, 'Write', perms.write, 'write', current,
+            perms.enforced.write),
+          explicitSection(perms),
+          crewsSection(target, perms, current));
+        body.replaceChildren(...parts);
+        return;
+      }
       if (answer.file) {
         const file = make('section');
         file.append(make('h3', {text: 'File'}));
@@ -1705,23 +1839,11 @@
       if (answer.items !== undefined && answer.items !== null) {
         parts.push(make('section', {}, facts([['Items', answer.items]])));
       }
-      const perms = answer.permissions;
-      const header = make('section');
-      header.append(make('h3', {text: 'Permissions'}));
-      noted(header, current
-        ? 'Clay keeps current rules only.'
-        : 'Clay keeps current rules only: these are as of now, not of this ' +
-          'revision, and cannot be changed from a historical revision.');
-      parts.push(header,
-        ruleSection('Read', perms.read, 'read', current, perms.enforced.read),
-        ruleSection('Write', perms.write, 'write', current,
-          perms.enforced.write),
-        explicitSection(perms),
-        crewsSection(perms, current));
       body.replaceChildren(...parts);
+      mediaAttributes(target, answer, body);
     }
 
-    async function change(op, body) {
+    async function change(op, body, target) {
       try {
         await api(op, body);
       } catch (cause) {
@@ -1730,7 +1852,14 @@
       }
       runtime.notify(op === 'reload' ? 'Reloading crews.' : 'Sent to clay.');
       //  crews come back as a gift a moment later
-      setTimeout(loadAttributes, op === 'rule' ? 50 : 400);
+      setTimeout(() => {
+        for (const opened of attributeTargets.values()) {
+          if (opened.ref.kind === 'permissions'
+            && (op !== 'rule' || opened.path[0] === target.path[0])) {
+            loadAttributes(opened);
+          }
+        }
+      }, op === 'rule' ? 50 : 400);
     }
 
     // ---- upload -------------------------------------------------------------
@@ -1739,9 +1868,11 @@
     let uploadFile = null;
     let uploadPlan = null;
 
-    function startUpload(dir) {
+    function startUpload(dir, view = currentView()) {
       if (!dir || !isNow(dir)) return;
-      uploadDir = dir;
+      uploadDir = view === 'apps' && appsUploadRoot === 'data'
+        && dir[2] !== 'data'
+        ? [...dir.slice(0, 2), 'data', ...dir.slice(2)] : [...dir];
       uploadInput.value = '';
       uploadInput.click();
     }
@@ -1935,25 +2066,41 @@
 
     // ---- the runtime ---------------------------------------------------
     const config = window.urui.config;
-    let attributesDialog;
     let uploadDialog;
     let revisionDialog;
     let tombDialog;
+    const detailHooks = {
+      persist: false,
+      create: ({path, entry}) => ({
+        label: entry === 'file' ? fileTabLabel(path)
+          : `${path.slice(2).join('/') || '%' + path[0]}${isNow(path) ? '' : ' rev ' + path[1]}`,
+        data: {path: [...path], entry}
+      }),
+      render: mountAttributes,
+      dispose: disposeAttributes
+    };
     const runtime = window.urui.runtime({
+      refs: {attributes: detailHooks, permissions: detailHooks},
       session: {
-        read: (key) => (key === 'heathcliffTrees' ? trees : undefined),
+        read: (key) => {
+          if (key === 'heathcliffTrees') return trees;
+          if (key === 'preferences.appsUploadRoot') return appsUploadRoot;
+        },
         validate: (key, value) => {
-          return key === 'heathcliffTrees' ? validTrees(value) : undefined;
+          if (key === 'heathcliffTrees') return validTrees(value);
+          if (key === 'preferences.appsUploadRoot') {
+            return value === 'root' ? 'root' : 'data';
+          }
         }
       },
       contextMenu: {
         items: [
           {id: 'download', label: 'Download',
             title: 'Save this file to this computer'},
-          {id: 'attributes', label: 'File attributes…',
-            title: 'Attributes and permissions of this file'},
-          {id: 'path-attributes', label: 'Path attributes…',
-            title: 'Attributes and permissions of this path'},
+          {id: 'attributes', label: 'Attributes…',
+            title: 'File or path attributes'},
+          {id: 'permissions', label: 'Permissions…',
+            title: 'Read and write rules and crews'},
           {id: 'upload', label: 'Upload…',
             title: 'Upload a file into this directory'},
           {id: 'tomb', label: 'Delete', danger: true,
@@ -1971,8 +2118,6 @@
           return {
             open: {hidden: !file, disabled: target.tomb},
             download: {hidden: !file, disabled: target.tomb},
-            attributes: {hidden: !file},
-            'path-attributes': {hidden: file},
             upload: {hidden: file || !current},
             //  history is the only place a file is deleted from here
             delete: {hidden: true},
@@ -1983,10 +2128,10 @@
         },
         select: (id, target) => {
           if (id === 'download') download(target.path);
-          else if (id === 'attributes' || id === 'path-attributes') {
-            openAttributes(target.path, target.entry);
+          else if (id === 'attributes' || id === 'permissions') {
+            openAttributes(target.path, target.entry, id);
           }
-          else if (id === 'upload') startUpload(target.path);
+          else if (id === 'upload') startUpload(target.path, target.view);
           else if (id === 'tomb') openTomb(target.path);
           else if (id === 'now') {
             const desk = revisions[target.view]?.get(target.path[0]);
@@ -2003,6 +2148,28 @@
       },
       documents: {
         clay: {
+          label: (tab) => tab.path ? fileTabLabel(tab.path) : tab.draft,
+          beforeSave: async (tab, {path}) => {
+            if (isNow(path)) return;
+            const current = [path[0], 'now', ...path.slice(2)];
+            let head;
+            try {
+              head = await reply(await fetch(config.files.url, {
+                method: 'POST', credentials: 'same-origin',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({op: 'load', path: current})
+              }));
+            } catch (cause) {
+              if (cause.code !== 'not-found') throw cause;
+            }
+            const accepted = await runtime.confirm('historical-save', {
+              message: `Saving ${fileLabel(path)} version ${path[1]} ` +
+                'will create a new current version of this file. ' +
+                'The historical version will remain unchanged. Continue?'
+            });
+            return accepted ? {path: current, base: head?.hash ?? null}
+              : false;
+          },
           afterActivate: () => {
             markActive();
             renderResult();
@@ -2012,9 +2179,28 @@
         }
       }
     });
-    attributesDialog = runtime.dialogs.modal(attributesModal, {
-      close: closeAttributes
-    });
+    const uploadSettings = make('fieldset', {class: 'settings-field'},
+      make('legend', {class: 'settings-label', text: 'Apps uploads'}));
+    const uploadChoices = new Map();
+    for (const [value, label] of [
+      ['data', 'Upload to /data/ in Apps'],
+      ['root', 'Upload to / in Apps']
+    ]) {
+      const radio = make('input', {
+        type: 'radio', name: 'hc-apps-upload-path', value,
+        id: `hc-apps-upload-${value}`
+      });
+      uploadChoices.set(value, radio);
+      radio.addEventListener('change', () => {
+        if (!radio.checked) return;
+        appsUploadRoot = value;
+        runtime.session.queue();
+      });
+      uploadSettings.append(make('label', {class: 'preference'},
+        radio, make('span', {text: label})));
+    }
+    el('settings-modal').querySelector('.settings-card')
+      .append(uploadSettings);
     uploadDialog = runtime.dialogs.modal(el('hc-upload'), {close: closeUpload});
     revisionDialog = runtime.dialogs.modal(el('hc-revision'), {
       close: closeRevision
@@ -2029,7 +2215,10 @@
       event.preventDefault();
       acceptRevision();
     });
-    el('hc-attributes-close').addEventListener('click', closeAttributes);
+    el('hc-download-button').addEventListener('click', () => {
+      const path = runtime.documents.active(store)?.path;
+      if (path) download(path);
+    });
     el('hc-upload-button').addEventListener('click', () => {
       const dir = uploadTarget();
       if (dir) {
@@ -2042,6 +2231,9 @@
     });
     runtime.start((saved) => {
       trees = validTrees(saved?.heathcliffTrees);
+      appsUploadRoot = saved?.['preferences.appsUploadRoot'] === 'root'
+        ? 'root' : 'data';
+      uploadChoices.get(appsUploadRoot).checked = true;
     });
     runtime.documents.editor(store)?.onChange?.(() => queueResult());
     window.urui.boot({});

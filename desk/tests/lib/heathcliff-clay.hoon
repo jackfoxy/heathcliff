@@ -34,6 +34,10 @@
 ::
 ::  +|  The mark policy
 ::
+++  test-edit-historical-copies
+  =/  policy=policy:ufiles  file-policy:web
+  (expect !>(edit-snapshots.policy))
+::
 ++  test-every-mark-has-a-policy
   ::  52 marks; an unknown mark is read-only too.
   ::  wet +snoc and +weld here loop the type check (fuse-loop)

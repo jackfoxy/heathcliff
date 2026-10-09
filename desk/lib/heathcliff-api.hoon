@@ -5,6 +5,7 @@
 ::
 /+  hc=heathcliff-clay, hp=heathcliff-perm, ht=heathcliff-transfer
 /+  ufiles=urui-files
+/+  hm=heathcliff-markdown
 |%
 ::  +|  Requests
 ::
@@ -53,6 +54,16 @@
     [%& ~ jon]
   =/  op=(unit @t)  (text-field:ufiles fields 'op')
   ?+  op  [%| (fail:ufiles %bad-request 400 'unknown op')]
+      [~ %markdown]
+    =/  text=(unit @t)  (text-field:ufiles fields 'text')
+    ?~  text  [%| bad]
+    ?:  (gth (met 3 u.text) limit:hm)
+      [%| (fail:ufiles %payload-too-large 413 'Markdown preview limit is 64 KiB')]
+    =/  rendered=(unit @t)  (render:hm u.text)
+    ?~  rendered
+      [%| (fail:ufiles %unprocessable 422 'Markdown could not be rendered')]
+    (answer (ok-json:ufiles ~[['html' s+u.rendered]]))
+  ::
       [~ %roots]
     %-  answer
     %-  ok-json:ufiles
@@ -236,7 +247,10 @@
     ?.  file  ~
     =/  gone=?  !(live:hc bowl full)
     =/  size=(unit @ud)  ?:(gone ~ (size-of .^(* %cq full)))
-    =/  type=(unit mite)  (ctype:hc (rear pax))
+    =/  type=(unit mite)
+      ?:  |(gone !=(%mime (rear pax)))  (ctype:hc (rear pax))
+      =/  stored=(unit mime)  ((soft mime) .^(* %cq full))
+      ?~(stored ~ `p.u.stored)
     %-  pairs:enjs:format
     :~  ['size' ?~(size ~ (numb:enjs:format u.size))]
         ['type' s+?~(type 'unknown' (en-mite:mimes:html u.type))]

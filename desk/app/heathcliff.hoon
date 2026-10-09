@@ -20,6 +20,10 @@
 /*  ace-sets    %js   /web/ace/ext-settings-menu/js
 /*  ace-vim     %js   /web/ace/keybinding-vim/js
 /*  ace-lic     %txt  /web/ace/license/txt
+/*  media-js    %js   /web/mediainfo/index/js
+/*  media-work  %js   /web/media-worker/js
+/*  media-wasm  %atom  /web/mediainfo/module/atom
+/*  media-lic   %txt  /web/mediainfo/license/txt
 ::
 |%
 ::  +|  State
@@ -61,6 +65,10 @@
         ['/ace/ext-settings_menu.js' js ace-sets]
         ['/ace/keybinding-vim.js' js ace-vim]
         ['/ace/license.txt' text (of-wain:format ace-lic)]
+        ['/mediainfo.js' js media-js]
+        ['/media-worker.js' js media-work]
+        ['/mediainfo.wasm' 'application/wasm' media-wasm]
+        ['/mediainfo-license.txt' text (of-wain:format media-lic)]
     ==
   |=  [suffix=@t content-type=@t body=@t]
   [suffix content-type (as-octs:mimes:html body)]

@@ -1388,6 +1388,7 @@
   //
   //   create(payload)     `{label, data}` for a new reference, or nothing
   //   render(panel, ref)  fill the reference panel from `ref.data`
+  //   dispose(ref)        release resources when a reference closes
   //   validate(data)      repaired data from a saved record, or undefined
   //   persist             false keeps the kind out of the session record
   let draggedTab;
@@ -1847,6 +1848,8 @@
   }
 
   function closeRefTab(id) {
+    const tab = refTabById(id);
+    if (tab) refHooks(tab.kind)?.dispose?.(tab);
     if (closeExplorerTab(id, 'ref')) changed();
   }
 
@@ -3029,6 +3032,8 @@
   //   fields.validate(saved, tab, ids)  app fields restored from a record
   //   activate(tab, choices)            domain reaction to a switch
   //   afterActivate(tab, choices)       the same, after render and save
+  //   label(tab)                       optional exact tab label
+  //   beforeSave(tab, {path})           false cancels; {path, base} redirects
   //   loaded(tab), saved(tab)           keep app data in step
   //
   // A tab whose `load` answered `readonly` is read-only like a tab from
@@ -3113,6 +3118,10 @@
   //  each is unique or runs out of directories.
   function docLabels(name) {
     const tabs = docState.get(name).tabs;
+    const custom = docHooks(name).label;
+    if (custom) {
+      return new Map(tabs.map((tab) => [tab.id, String(custom(tab))]));
+    }
     const labels = new Map();
     const depth = new Map(tabs.map((tab) => [tab.id, 0]));
     const labelOf = (tab) => {
@@ -4152,8 +4161,18 @@
       path = await docFileDialog({mode: 'save', store: name, tab});
       if (!path) return undefined;
     }
+    let prepared;
+    try {
+      prepared = await docHooks(name).beforeSave?.(tab, {path});
+    } catch (cause) {
+      docFailed(name, 'save', path, cause);
+      return undefined;
+    }
+    if (prepared === false || !docGet(name, tab.id)) return undefined;
+    if (prepared?.path) path = prepared.path;
     const text = tab.text;
-    let base = samePath(path, tab.path) ? tab.hash : null;
+    let base = prepared && Object.hasOwn(prepared, 'base')
+      ? prepared.base : samePath(path, tab.path) ? tab.hash : null;
     let overwrite = false;
     let saved;
     docEvent(name, 'save', 'start', path);

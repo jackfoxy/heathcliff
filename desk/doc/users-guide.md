@@ -34,7 +34,7 @@ the two differ, the desk name follows in grey, as `%desk`.
 
 A file whose stored data has been tombstoned at the revision shown is
 listed as `name.mark (tombstoned)`; it cannot be opened, downloaded or
-deleted again, though File attributes… still works.
+deleted again, though Attributes… still works.
 
 Folders come before files, both sorted by name. A file shows as
 `name.mark`: Clay has no file extensions, so `/app/dojo/hoon` is the file
@@ -49,7 +49,7 @@ to its existing tab.
 Each desk has a revision box beside its name. It starts at `now N`, the
 live desk at its latest revision N. Step back with ▾ (or the Down arrow),
 or type a revision number, to browse that desk as it was; files opened
-from it are read-only snapshots, labelled with their revision. Stepping up
+from it are labelled `name.mark version N`. Text files can be edited. Stepping up
 to N with ▴ (or the Up arrow) returns to `now N`. A revision number
 belongs to its desk alone and is never applied to another.
 
@@ -72,6 +72,12 @@ Clay has committed it and the file reads back as expected. If the file was
 changed elsewhere since you opened it, Heathcliff asks before overwriting.
 Text a mark cannot hold, such as invalid JSON, is refused with an error.
 
+Saving a historical file warns that it will create a new current version.
+Confirming saves to the same file at `now`; the historical version stays
+unchanged, and the source tab switches to the current file. Cancel leaves
+your edits unsaved. Concurrent changes to the current file still trigger
+the normal overwrite warning. Identical content does not create a revision.
+
 Every other file opens read-only: images, audio, video, fonts, PDFs, atoms,
 jams, nouns, mime files, hymn, urb, snip and txt-diff, and any mark
 Heathcliff does not know. The source pane then shows a summary, a hex dump,
@@ -88,7 +94,9 @@ The result pane previews the active file. For text it shows the current
 buffer, marked **unsaved buffer** when it differs from the saved file; for
 binary files it shows the committed file.
 
-- Markdown renders through urui's sanitized renderer.
+- Markdown renders on the ship with the Hoon Markdown library, including
+  tables, task lists, and fenced code. Scripts and unsafe HTML are removed.
+  Previews accept up to 64 KiB; larger documents show source and a message.
 - HTML renders in a sandboxed frame that runs no scripts.
 - SVG shows as an image; its scripts never run.
 - CSV and TSV show as tables (the first 500 rows).
@@ -109,8 +117,8 @@ press Shift+F10 or the context-menu key:
 
 - **Open** a file.
 - **Download** a file.
-- **File attributes…** for a file, **Path attributes…** for a desk or
-  folder.
+- **Attributes…** for file, desk, or folder information.
+- **Permissions…** for read and write rules and crews.
 - **Upload…** into a desk or folder at now.
 - **Delete** a file's version at an older revision (see below). Disabled
   at now: Heathcliff does not delete current files.
@@ -119,12 +127,29 @@ press Shift+F10 or the context-menu key:
 
 ## File and path attributes, and permissions
 
-**File attributes…** (on a file) or **Path attributes…** (on a desk or
-folder) opens a dialog for the chosen item: its ship, app and
+**Attributes…** opens a closable tab in the reference pane for the chosen item:
+its ship, app and
 desk, revision, path, kind and mark; for a file its size, type, and whether
 its data is still stored; for a folder how many items it holds.
 
-The permissions part shows the **read** and **write** rules in force, in
+File tabs use `name.mark` at the current revision and `name.mark version N`
+for a historical revision. Opening the same item's attributes again selects
+its existing reference tab. Different files and revisions can stay open
+side by side; the source and result panes remain usable.
+Double-click a file's Attributes or Permissions tab to open that file in
+the source and display panes at the tab's revision.
+
+Audio, video, MIME, and image files append populated, read-only MediaInfo
+attributes for the container and each track. These include format descriptions,
+compression methods, stream sizes and file percentages, timing, audio and
+color properties, and codec-specific metadata when available. Internal
+bookkeeping and duplicate formatted representations are omitted. SVG
+shows its decoded dimensions. These describe the committed file at the
+selected revision. Unknown or unreadable formats show a message; ordinary
+attributes remain available.
+
+**Permissions…** opens a separate reference tab for the chosen item. It
+shows the **read** and **write** rules in force, in
 plain words ("only 2 ships", "everyone except 1 crew"), and where each comes
 from: set on this item, inherited from a parent, or Clay's default.
 
@@ -147,7 +172,7 @@ after **Reload crews from clay**.
 Two limits come from Clay itself:
 
 - **Rules are current only.** Clay keeps no history of permissions. On an
-  older revision the dialog shows today's rules, says so, and does not let
+  older revision the permissions tab shows today's rules, says so, and does not let
   you change them.
 - **Write rules are not enforced.** This kernel stores and inherits write
   rules but never checks them. Treat a write rule as a record, not as
@@ -173,6 +198,15 @@ Delete is disabled at now. To remove a current file, use the dojo.
 Select a folder or desk at now and press **Upload…** in the toolbar, or use
 **Upload…** in its item menu. Choose a file from your computer; cancelling
 the chooser does nothing.
+
+In **Settings → Apps uploads**, choose **Upload to /data/ in Apps**
+(the default) or **Upload to / in Apps**. This preference is saved in this
+browser. In Apps, the selected folder is relative to that prefix: selecting
+the desk uploads to `/data/` or `/`, and selecting `/notes` uploads to
+`/data/notes` or `/notes`. A selected path already under `/data/` keeps that
+prefix once. Data view uploads stay in the selected Data directory.
+Selecting a file uses its containing folder; with nothing selected, the
+active file's folder is used.
 
 The file's extension becomes its mark: `photo.png` is stored as
 `/folder/photo/png` with mark `png`. Before anything is written, Heathcliff
@@ -211,8 +245,11 @@ marks*. The dialog lists each mark it would copy and where from.
 
 ## Downloading
 
-**Download** saves a file to your computer, from now or any revision. The
-download is the file's external form, its mark's own conversion to bytes:
+**Download…**, immediately left of **Upload…** in the toolbar, saves the
+active file at its selected revision. It is disabled for unsaved drafts.
+The item's context menu also offers **Download**.
+
+The download is the file's external form, its mark's own conversion to bytes:
 most files come back exactly as stored, a `mime` file as its stored bytes,
 and a `noun` file as its jam. Structured marks such as `bill` download as
 the text their mark prints, not necessarily the bytes that were uploaded.
