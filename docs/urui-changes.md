@@ -26,6 +26,15 @@ Using the file revision on the outer, deskless endpoint caused `bail: 4`
 when opening historical files. Virtual-scry regressions cover current and
 historical text, historical tombstones, and read-only inspection.
 
+## `%md` codec
+
+`stock-codecs` maps `%md` to `%mime` (was `%cord`). `%base`'s md mark now
+stores a `wain`, while desks served by %docs keep a `@t` md mark (%docs
+reads `%cx` as `@t`; Heathcliff's switch to the `wain` mark broke
+`/docs/d/heathcliff/*`). `%mime` converts through the mark on the file's own
+desk, so either shape loads and saves. Heathcliff restored its `@t` md mark
+and uses `[%md %mime]` in `heathcliff-clay` `codecs`.
+
 ## Files changed in `~/gitrepos/urui`
 
 | File | Change |
@@ -35,7 +44,9 @@ historical text, historical tombstones, and read-only inspection.
 | `desk/tests/lib/urui-files.hoon` | fixtures `clay-store`, `locate-desk`, `located`; 7 new arms |
 | `tests/browser/scenarios/document-seams.js` | new doubles scenario for the seams above |
 | `tests/browser/scenarios/index.js` | registers `document-seams` |
-| `.agents/skills/urui-protocol/references/contracts.md` | documents the above |
+| `.agents/skills/urui-protocol/references/contracts.md` | documents the above; stock codecs list `mime` md |
+| `desk/lib/urui-files.hoon` (md) | `stock-codecs`: `[%md %mime]` |
+| `desk/tests/lib/urui-files.hoon` (md) | `test-file-codec` expects `%mime` for md |
 | `tests/fixture/app/urui-fixture.hoon` | pre-existing bug: `++assets` bound a face `html`, shadowing zuse's `+html`, so `mimes:html` failed (`-find.mimes`) and `/tests/app/urui-fixture` never built; renamed to `page` |
 
 ## Propagation
@@ -44,6 +55,9 @@ historical text, historical tombstones, and read-only inspection.
   consumer code changes needed.
 - heathcliff: `desk/lib/urui-files.hoon`, `desk/lib/urui-js.hoon`,
   `desk/tests/lib/urui-files.hoon` copied by hand.
+- `%md` codec: copied by hand to heathcliff `desk/lib/urui-files.hoon` and
+  `desk/tests/lib/urui-files.hoon`, and to the newcomet `%urui` and
+  `%heathcliff` mounts. Not synced to graph-viz or obelisk.
 - The `syncModalInert` fix to `urui-js.hoon` came after the consumer sync:
   graph-viz and obelisk are one change behind (`verify-sync` reports
   `desk/lib/urui-js.hoon` stale); heathcliff has it.

@@ -32,13 +32,16 @@
   ::
   ::    Every other mark takes the %view fallback: read-only, inspected
   ::    by +inspect.  bill, docket-0, kelvin and ship hold structured
-  ::    nouns, edited through their own mime conversion.
+  ::    nouns, edited through their own mime conversion.  md is a wain
+  ::    on %base but a cord on desks %docs serves, so it goes through
+  ::    the mark on the file's own desk too.
   ^-  (list [mark=@tas =codec:ufiles])
-  :~  [%txt %wain]  [%csv %wain]  [%tab %wain]  [%md %wain]  [%pem %wain]
+  :~  [%txt %wain]  [%csv %wain]  [%tab %wain]  [%pem %wain]
       [%hoon %cord]  [%css %cord]  [%js %cord]  [%html %cord]
       [%svg %cord]  [%xml %cord]  [%udon %cord]  [%umd %cord]
       [%map %cord]  [%json %json]
       [%bill %mime]  [%docket-0 %mime]  [%kelvin %mime]  [%ship %mime]
+      [%md %mime]
   ==
 ::
 ++  ctype

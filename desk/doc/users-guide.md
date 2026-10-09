@@ -6,6 +6,12 @@ and upload files, and manage read and write permissions.
 
 Open it at `/heathcliff` on your ship. You must be logged in.
 
+**Help** lists Keyboard Shortcuts, About Heathcliff and Ace editor, and
+this Users Guide from the desk's `doc.toc`. Select a topic to open it in a
+documentation tab in the reference pane. These tabs are remembered in this
+browser. If the ship does not serve `/docs`, Help shows a short built-in
+guide instead.
+
 ## The workbench
 
 Three panes, left to right:
@@ -207,8 +213,8 @@ The **Upload…** context-menu action uses the selected desk or folder at
 now and immediately opens the local file chooser. It keeps the local
 filename and its mark. Cancelling the chooser does nothing.
 
-In **Settings → Apps uploads**, choose **Upload to /data/ in Apps**
-(the default) or **Upload to / in Apps**. This preference is saved in this
+In **Settings → Apps uploads**, choose **Apps upload to /data/**
+(the default) or **Apps upload to /**. This preference is saved in this
 browser. For context-menu uploads in Apps, the selected folder is relative
 to that prefix: selecting
 the desk uploads to `/data/` or `/`, and selecting `/notes` uploads to

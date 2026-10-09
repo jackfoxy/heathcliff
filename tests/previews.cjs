@@ -17,11 +17,22 @@ const uploadChecks=[];
 const uploadPosts=[];
 const uploadBodies=[];
 let pickerRoots=false;
+let docsEnabled=false;
 const treeQueries=[];
 const rule={gist:'open',origin:'default',mode:'black',ships:[],crews:[]};
 const server=http.createServer(async(req,res)=>{
  const route=req.url.split('?')[0];
  const send=(type,data,status=200)=>{res.writeHead(status,{'Content-Type':type});res.end(data)};
+ if(route==='/docs')return send('text/html','<title>Docs</title>',docsEnabled?200:404);
+ if(route==='/heathcliff/doc.toc')return send('text/plain',fs.readFileSync(root+'/desk/doc.toc'));
+ if(route.startsWith('/docs/d/heathcliff/')){
+  const slug=route.slice('/docs/d/heathcliff/'.length);
+  if(!/^[a-z-]+$/.test(slug))return send('text/plain','not found',404);
+  const file=path.join(root,'desk/doc',slug+'.md');
+  if(!fs.existsSync(file))return send('text/plain','not found',404);
+  const text=fs.readFileSync(file,'utf8').replaceAll('&','&amp;').replaceAll('<','&lt;');
+  return send('text/html',`<title>${slug}</title><pre>${text}</pre>`);
+ }
  const files={
   '/heathcliff':['text/html',cache+'/heathcliff-page.html'],
   '/heathcliff/app.css':['text/css',cache+'/heathcliff-app.css'],
@@ -242,6 +253,70 @@ await window.hcTest.openAttributes(['base','now','sample','wav'],'file');window.
  await page.locator('.ref-tab[aria-selected="true"]').dblclick();
  assert.equal(loads.length,beforeTomb);
  console.log('PASS double-click opens reference files at their revision, reuses tabs, and ignores tombstones');
+ assert.equal(await page.locator('#clay-copy').getAttribute('title'),'Copy to clipboard');
+ const fullscreen=page.locator('#hc-result-fullscreen');
+ const bar=await page.locator('.hc-result-head').boundingBox();
+ const icon=await fullscreen.boundingBox();
+ assert(Math.abs(icon.x+icon.width-bar.x-bar.width)<2);
+ await fullscreen.click();
+ await page.waitForFunction(()=>document.fullscreenElement?.id==='result-pane');
+ assert.equal(await fullscreen.getAttribute('aria-pressed'),'true');
+ await fullscreen.click();
+ await page.waitForFunction(()=>!document.fullscreenElement);
+ console.log('PASS result fullscreen placement and toggle, copy tooltip');
+ await page.evaluate(()=>window.hcTest.openAttributes(['base','now','sample','mov'],'file'));
+ await page.locator('.ref-tab[aria-selected="true"]').dblclick();
+ await page.waitForFunction(()=>document.querySelector('#result-view video')?.readyState>=1);
+ const player=page.locator('#result-view video');
+ const paneVideo=await player.boundingBox();
+ await player.evaluate(video=>{window.originalVideo=video;video.currentTime=0.1;});
+ await page.waitForFunction(()=>!window.originalVideo.seeking);
+ const position=await player.evaluate(video=>video.currentTime);
+ await fullscreen.click();
+ await page.waitForFunction(()=>document.fullscreenElement?.id==='result-pane');
+ const fullVideo=await player.boundingBox();
+ const videoBody=await page.locator('.hc-result-body').boundingBox();
+ assert(fullVideo.width>paneVideo.width && fullVideo.height>paneVideo.height);
+ assert(Math.abs(fullVideo.width-videoBody.width)<2);
+ assert(Math.abs(fullVideo.height-videoBody.height)<2);
+ assert.equal(await player.evaluate(video=>getComputedStyle(video).objectFit),'contain');
+ await fullscreen.click();
+ await page.waitForFunction(()=>!document.fullscreenElement);
+ const restoredVideo=await player.boundingBox();
+ assert(Math.abs(restoredVideo.width-paneVideo.width)<2);
+ assert(Math.abs(restoredVideo.height-paneVideo.height)<2);
+ assert(await player.evaluate(video=>video===window.originalVideo));
+ assert.equal(await player.evaluate(video=>video.currentTime),position);
+ console.log('PASS video expands with fullscreen and restores size and playback position');
+ // Click Chromium's actual native fullscreen control, inside its UA shadow DOM.
+ await fullscreen.click();
+ await page.waitForFunction(()=>document.fullscreenElement?.id==='result-pane');
+ await player.hover();
+ const cdp=await page.context().newCDPSession(page);
+ const nativeTree=await cdp.send('DOM.getDocument',{depth:-1,pierce:true});
+ const findNativeToggle=node=>{
+  if(node.attributes?.includes('-webkit-media-controls-fullscreen-button'))return node;
+  for(const child of [...(node.children||[]),...(node.shadowRoots||[])]){
+   const found=findNativeToggle(child);if(found)return found;
+  }
+ };
+ const nativeToggle=findNativeToggle(nativeTree.root);
+ assert(nativeToggle,'Native video fullscreen control is present');
+ const {object}=await cdp.send('DOM.resolveNode',{nodeId:nativeToggle.nodeId});
+ await cdp.send('Runtime.callFunctionOn',{
+  objectId:object.objectId,functionDeclaration:'function(){this.click()}',userGesture:true
+ });
+ await page.waitForFunction(()=>!document.fullscreenElement);
+ assert.equal(await fullscreen.getAttribute('aria-pressed'),'false');
+ assert(await player.evaluate(video=>video===window.originalVideo));
+ assert.equal(await player.evaluate(video=>video.currentTime),position);
+ // Entering video fullscreen directly must still work without a pane layer.
+ await player.evaluate(video=>video.requestFullscreen());
+ await page.waitForFunction(()=>document.fullscreenElement===window.originalVideo);
+ await page.evaluate(()=>document.exitFullscreen());
+ await page.waitForFunction(()=>!document.fullscreenElement);
+ await cdp.detach();
+ console.log('PASS native video control exits pane fullscreen; standalone video fullscreen still works');
  // Editing a historical copy writes only to now, after explicit confirmation.
  const openHistory=async()=>{
   await page.evaluate(()=>window.hcTest.openAttributes(['base','3','history','txt'],'file'));
@@ -297,7 +372,7 @@ const body=document.querySelector('#result-view');body.replaceChildren();await w
  assert((await page.locator('#result-view').innerText()).includes('bad markdown'));
  // Exercise the real chooser, preflight, and upload URL with fixture files.
  await page.locator('#settings').click();
- assert(await page.getByRole('radio',{name:'Upload to /data/ in Apps',exact:true}).isChecked());
+ assert(await page.getByRole('radio',{name:'Apps upload to /data/',exact:true}).isChecked());
  await page.locator('#close-settings').click();
  const checkUpload = async (path, view, expected, submit=false) => {
    await page.evaluate(({path,view}) => {
@@ -325,7 +400,7 @@ const body=document.querySelector('#result-view');body.replaceChildren();await w
  await checkUpload(['base','now','data','notes'],'apps',['base','now','data','notes']);
  await checkUpload(['base','now','data','notes'],'data',['base','now','data','notes']);
  await page.locator('#settings').click();
- await page.getByRole('radio',{name:'Upload to / in Apps',exact:true}).check();
+ await page.getByRole('radio',{name:'Apps upload to /',exact:true}).check();
  await page.locator('#close-settings').click();
  await checkUpload(['base','now'],'apps',['base','now']);
  await checkUpload(['base','now','notes'],'apps',['base','now','notes'],true);
@@ -334,7 +409,7 @@ const body=document.querySelector('#result-view');body.replaceChildren();await w
  await page.reload();
  await page.waitForFunction(()=>window.hcTest);
  await page.locator('#settings').click();
- assert(await page.getByRole('radio',{name:'Upload to / in Apps',exact:true}).isChecked());
+ assert(await page.getByRole('radio',{name:'Apps upload to /',exact:true}).isChecked());
  await page.locator('#close-settings').click();
  await page.addInitScript(()=>{
    const key='heathcliff.session';
@@ -345,7 +420,7 @@ const body=document.querySelector('#result-view');body.replaceChildren();await w
  await page.reload();
  await page.waitForFunction(()=>window.hcTest);
  await page.locator('#settings').click();
- assert(await page.getByRole('radio',{name:'Upload to /data/ in Apps',exact:true}).isChecked());
+ assert(await page.getByRole('radio',{name:'Apps upload to /data/',exact:true}).isChecked());
  await page.locator('#close-settings').click();
  console.log('PASS Apps upload defaults, paths, Data isolation, and persistence');
  pickerRoots=true;
@@ -392,7 +467,7 @@ const body=document.querySelector('#result-view');body.replaceChildren();await w
  assert(uploadBodies.at(-1).includes('filename="renamed.txt"'));
  await page.locator('#hc-upload-cancel').click();
  await page.locator('#settings').click();
- await page.getByRole('radio',{name:'Upload to / in Apps',exact:true}).check();
+ await page.getByRole('radio',{name:'Apps upload to /',exact:true}).check();
  await page.locator('#close-settings').click();
  await page.locator('#hc-upload-button').click();
  await page.locator('.hc-upload-tree summary').filter({hasText:/^%base \/$/}).click();
@@ -402,6 +477,29 @@ const body=document.querySelector('#result-view');body.replaceChildren();await w
  assert.deepEqual(treeQueries.at(-1).scope,[]);
  await page.locator('#hc-upload-cancel').click();
  console.log('PASS toolbar upload destination tree, both settings, mark validation, stale checks, and renamed multipart upload');
+ await page.locator('#help').click();
+ assert(await page.locator('#fallback-help-content').isVisible());
+ assert(await page.locator('#docs-help-content').isHidden());
+ await page.locator('#close-help').click();
+ docsEnabled=true;
+ await page.locator('#help').click();
+ await page.waitForFunction(()=>!document.getElementById('docs-help-content').hidden);
+ const topics=[['keyboard-shortcuts','Keyboard Shortcuts'],['users-guide','Users Guide'],['about','About Heathcliff and Ace editor']];
+ assert.deepEqual(await page.locator('#docs-help-nav a').allTextContents(),topics.map(([,title])=>title));
+ for(const [slug,title] of topics){
+  if(!(await page.locator('#docs-help-content').isVisible()))await page.locator('#help').click();
+  const link=page.locator('#docs-help-nav a').filter({hasText:title});
+  assert.equal(await link.getAttribute('href'),'/docs/d/heathcliff/'+slug);
+  await link.click();
+  const frame=page.frameLocator(`iframe[src="/docs/d/heathcliff/${slug}"]`);
+  await frame.locator('pre').waitFor();
+  assert((await frame.locator('pre').innerText()).includes('# '));
+ }
+ await page.reload();
+ await page.waitForFunction(()=>window.hcTest?.runtime.explorer.docs.available()===true);
+ assert.deepEqual(await page.evaluate(()=>window.hcTest.runtime.explorer.docs.list().map(tab=>tab.path)),topics.map(([slug])=>slug));
+ assert.equal(await page.locator('iframe[src="/docs/d/heathcliff/about"]').count(),1);
+ console.log('PASS doc.toc Help topics, documentation tabs, persistence, and fallback without /docs');
  console.log('Browser assertions passed',errors);assert.deepEqual(errors,[]);
  }finally{await browser.close();server.close();fs.rmSync(cache,{recursive:true,force:true});}
 })().catch(e=>{console.error(e);server.close();fs.rmSync(cache,{recursive:true,force:true});process.exitCode=1});

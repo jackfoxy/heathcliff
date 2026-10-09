@@ -1,0 +1,3 @@
+/keyboard-shortcuts/md     Keyboard Shortcuts
+/users-guide/md            Users Guide
+/about/md                  About Heathcliff and Ace editor

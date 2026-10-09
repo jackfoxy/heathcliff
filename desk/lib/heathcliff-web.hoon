@@ -35,7 +35,7 @@
           [%empty 'Nothing selected']
           [%error 'Error']
       ==
-      docs-root=~
+      docs-root=`'/docs/d/heathcliff/'
       ace-spec
       layout=%columns
       collapse=|
@@ -85,6 +85,9 @@
       ['explorerOpen' %urui %scalar ~]
       ['resultOpen' %urui %scalar ~]
       ['explorerView' %urui %scalar ~]
+      ['explorerOrder' %urui %scalar ~]
+      ['docsTabs' %urui %tabs ~]
+      ['nextDocs' %urui %next ~]
       ['clayTabs' %urui %tabs `%clay]
       ['activeClayTabId' %urui %active `%clay]
       ['nextClayTab' %urui %next `%clay]
@@ -215,7 +218,11 @@
       kind=~
       :~  %+  pinned  %body
           :^  %panel  'result-body'  ~
-          :~  ;div#result-view.hc-result(aria-live "polite");
+          :~  ;div#result-view.hc-result(aria-live "polite")
+                ;+  %:  fullscreen-toggle:shell
+                      'hc-result-fullscreen'  'result-pane'  'results'
+                    ==
+              ==
           ==
       ==
   ==
@@ -327,7 +334,10 @@
           ; pane; every other format opens read-only and previews in the
           ; result pane.
         ==
-        ;p: A desk's revision box browses an older revision, read-only.
+        ;p
+          ; A desk's revision box browses older revisions. Saving an
+          ; edited historical text file creates a new current version.
+        ==
         ;p
           ; Right-click an item, or use its … button, for Download,
           ; Attributes…, Permissions…, Upload… and Delete.
@@ -450,12 +460,20 @@
   .hc-result { display: grid; gap: 0.5rem; padding: 0.5rem; min-width: 0; }
   .hc-result-head {
     display: flex;
-    flex-wrap: wrap;
     gap: 0.5rem;
     align-items: center;
     color: var(--muted);
     font-size: 0.9em;
   }
+  .hc-result-path {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  #hc-result-fullscreen { margin-left: auto; flex: 0 0 auto; }
   .hc-badge {
     border: 1px solid currentColor;
     border-radius: 999px;
@@ -469,6 +487,23 @@
     font-size: 0.85rem;
   }
   .hc-result img, .hc-result video { max-width: 100%; height: auto; }
+  .is-fullscreen .hc-result.hc-video-result {
+    flex: 1;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .is-fullscreen .hc-video-result .hc-result-body {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .is-fullscreen .hc-video-result video {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    height: 0;
+    object-fit: contain;
+  }
   /* as graph-viz does: dark-theme SVG is inverted, hues kept */
   :root[data-effective-theme='dark'] .hc-result .hc-svg {
     filter: invert(1) hue-rotate(180deg);
@@ -1037,6 +1072,7 @@
     let fontFace;
     let objectUrl;
     let markdownRequest;
+    const resultFullscreen = el('hc-result-fullscreen');
 
     function cleanResult() {
       markdownRequest?.abort();
@@ -1073,17 +1109,21 @@
       const host = el('result-view');
       if (!host) return;
       const tab = runtime.documents.active(store);
+      host.classList.toggle('hc-video-result',
+        Boolean(tab?.path && video.has(markOf(tab.path))));
       el('hc-download-button').disabled = !tab?.path;
       if (!tab) {
-        host.replaceChildren(make('p', {
-          class: 'hc-note', text: 'Open a file from Apps or Data.'
-        }));
+        host.replaceChildren(
+          make('div', {class: 'hc-result-head'}, resultFullscreen),
+          make('p', {
+            class: 'hc-note', text: 'Open a file from Apps or Data.'
+          }));
         return;
       }
       const path = tab.path;
       const mark = path ? markOf(path) : null;
       const dirty = tab.text !== tab.clean;
-      const head = make('div', {class: 'hc-result-head'});
+      const head = make('div', {class: 'hc-result-path'});
       if (path) {
         head.append(make('span', {text: `%${path[0]} ${clayText(path)}`}));
         head.append(make('span', {class: 'hc-badge',
@@ -1100,7 +1140,8 @@
         head.append(make('span', {class: 'hc-badge', text: 'unsaved buffer'}));
       }
       const body = make('div', {class: 'hc-result-body'});
-      host.replaceChildren(head, body);
+      host.replaceChildren(
+        make('div', {class: 'hc-result-head'}, head, resultFullscreen), body);
       const bytes = !textual.has(mark) || tab.readonly;
       if (bytes && path && dirty) {
         noted(body, 'Showing the committed file.');
@@ -1245,6 +1286,24 @@
       const node = make(tag, {
         controls: true, preload: 'metadata', src: rawUrl(tab.path)
       });
+      if (tag === 'video') {
+        node.addEventListener('fullscreenchange', async () => {
+          const pane = node.closest('#result-pane');
+          if (document.fullscreenElement !== node ||
+              !pane?.matches(':fullscreen')) return;
+          // The native control stacks video fullscreen over the pane.
+          // Treat that click as a return to the normal pane instead.
+          try {
+            await document.exitFullscreen();
+            if (document.fullscreenElement === pane) {
+              await document.exitFullscreen();
+            }
+          } catch (_) {
+            runtime.notify('Unable to leave fullscreen mode.',
+              {kind: 'error'});
+          }
+        });
+      }
       node.addEventListener('error', () => {
         node.remove();
         noted(body, 'This browser cannot play this file.');
@@ -2363,8 +2422,8 @@
       make('legend', {class: 'settings-label', text: 'Apps uploads'}));
     const uploadChoices = new Map();
     for (const [value, label] of [
-      ['data', 'Upload to /data/ in Apps'],
-      ['root', 'Upload to / in Apps']
+      ['data', 'Apps upload to /data/'],
+      ['root', 'Apps upload to /']
     ]) {
       const radio = make('input', {
         type: 'radio', name: 'hc-apps-upload-path', value,
@@ -2381,6 +2440,8 @@
     }
     el('settings-modal').querySelector('.settings-card')
       .append(uploadSettings);
+    el('clay-copy').title = 'Copy to clipboard';
+    el('clay-copy').setAttribute('aria-label', 'Copy to clipboard');
     uploadDialog = runtime.dialogs.modal(el('hc-upload'), {close: closeUpload});
     revisionDialog = runtime.dialogs.modal(el('hc-revision'), {
       close: closeRevision

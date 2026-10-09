@@ -25,6 +25,8 @@ and concurrent-write conflicts. Upload checks cover the Apps prefix setting, def
 persistence, unchanged context-menu/Data destinations, and the toolbar's
 destination tree, typed paths, mark validation, stale checks, and renamed
 multipart uploads.
+Help checks load the real `doc.toc`, open each documentation topic, restore
+documentation tabs after reload, and verify fallback help without `/docs`.
 Hoon suites check real Markdown parsing, sanitization, and
 the API contract. No ship is changed.
 

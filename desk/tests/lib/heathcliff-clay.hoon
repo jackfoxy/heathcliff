@@ -22,7 +22,7 @@
       [%flac %view]  [%gif %view]  [%hoon %cord]  [%html %cord]
       [%hymn %view]  [%ico %view]  [%jam %view]  [%jpeg %view]
       [%jpg %view]  [%js %cord]  [%json %json]  [%kelvin %mime]
-      [%map %cord]  [%md %wain]  [%mid %view]  [%mime %view]
+      [%map %cord]  [%md %mime]  [%mid %view]  [%mime %view]
       [%mov %view]  [%mp3 %view]  [%mp4 %view]  [%mpeg %view]  [%noun %view]
       [%oga %view]  [%ogg %view]  [%ogv %view]  [%otf %view]
       [%pdf %view]  [%pem %wain]  [%png %view]  [%ship %mime]

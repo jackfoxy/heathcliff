@@ -20,6 +20,7 @@
 /*  ace-sets    %js   /web/ace/ext-settings-menu/js
 /*  ace-vim     %js   /web/ace/keybinding-vim/js
 /*  ace-lic     %txt  /web/ace/license/txt
+/*  docs-toc    %toc  /doc/toc
 /*  media-js    %js   /web/mediainfo/index/js
 /*  media-work  %js   /web/media-worker/js
 /*  media-wasm  %atom  /web/mediainfo/module/atom
@@ -49,6 +50,7 @@
   =/  text=@t  'text/plain; charset=utf-8'
   %+  turn
     :~  ['/app.js' js javascript:web]
+        ['/doc.toc' text docs-toc]
         ['/app.css' 'text/css; charset=utf-8' css:web]
         ['/ace/ace.js' js ace-core]
         ['/ace/heathcliff-config.js' js ace-config-js:web]

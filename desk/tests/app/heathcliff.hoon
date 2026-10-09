@@ -139,6 +139,15 @@
   ^-  tang
   (expect-eq !>(200) !>((status (poke (request %'GET' url | ~)))))
 ::
+++  test-doc-toc
+  =/  out  (poke (request %'GET' '/heathcliff/doc.toc' | ~))
+  ;:  weld
+    (expect-eq !>(200) !>((status out)))
+    (expect !>(!=(~ (find "Keyboard Shortcuts" (trip (body out))))))
+    (expect !>(!=(~ (find "About Heathcliff" (trip (body out))))))
+    (expect !>(!=(~ (find "Users Guide" (trip (body out))))))
+  ==
+::
 ++  test-root-browse-lists-nothing
   ::  urui's file dialog lists the root before a draft's first save.
   =/  text=@t  '{"op":"browse","scope":[]}'
