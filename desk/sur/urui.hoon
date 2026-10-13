@@ -185,7 +185,7 @@
       save=?
   ==
 ::
-+$  action  ?(%open %save %save-as %copy %ref %browse)
++$  action  ?(%new %open %save %save-as %copy %ref %browse)
 ::
 +$  store
   ::  One document tab store, rendered by one %documents tab level.

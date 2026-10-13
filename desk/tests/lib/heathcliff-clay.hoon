@@ -30,6 +30,9 @@
       [%ttf %view]  [%txt %wain]  [%txt-diff %view]  [%udon %cord]
       [%umd %cord]  [%urb %view]  [%wav %view]  [%weba %view]
       [%webm %view]  [%webp %view]  [%woff2 %view]  [%xml %cord]
+      [%zip %view]  [%rar %view]
+      [%heic %view]  [%sh %wain]
+      [%m4a %view]
   ==
 ::
 ::  +|  The mark policy
@@ -39,7 +42,7 @@
   (expect !>(edit-snapshots.policy))
 ::
 ++  test-every-mark-has-a-policy
-  ::  53 marks; an unknown mark is read-only too.
+  ::  58 marks; an unknown mark is read-only too.
   ::  wet +snoc and +weld here loop the type check (fuse-loop)
   =/  all=(list [mark=@tas codec=@tas])  [[%some-other-mark %view] marks]
   =/  policy=policy:ufiles  file-policy:web
@@ -51,7 +54,7 @@
     =/  want=(unit codec:ufiles)  `;;(codec:ufiles codec)
     =/  got=(unit codec:ufiles)  (file-codec:ufiles policy rel |)
     (expect-eq !>(want) !>(got))
-  =/  count=tang  (expect-eq !>(53) !>((lent marks)))
+  =/  count=tang  (expect-eq !>(58) !>((lent marks)))
   (zing `(list tang)`[count found])
 ::
 ++  test-text-marks-round-trip
@@ -77,7 +80,11 @@
     (expect !>(!(~(has in grabs:hc) %noun)))
     (expect !>((~(has in octs-marks:hc) %woff2)))
     (expect !>((~(has in octs-marks:hc) %mov)))
+    (expect !>((~(has in octs-marks:hc) %zip)))
+    (expect !>((~(has in octs-marks:hc) %rar)))
     (expect !>(!(~(has in octs-marks:hc) %png)))
+    (expect !>(!(~(has in octs-marks:hc) %heic)))
+    (expect !>(!(~(has in octs-marks:hc) %m4a)))
   ==
 ::
 ::  +|  Roots and cases
@@ -131,6 +138,9 @@
     (expect-eq !>(`(list @tas)`~[%mime %png]) !>((kin:hc %png)))
     (expect-eq !>(`(list @tas)`~[%noun %bill]) !>((kin:hc %bill)))
     (expect-eq !>(`(list @tas)`~[%txt]) !>((kin:hc %txt)))
+    (expect-eq !>(`(list @tas)`~[%txt %sh]) !>((kin:hc %sh)))
+    (expect-eq !>(`(list @tas)`~[%mime %heic]) !>((kin:hc %heic)))
+    (expect-eq !>(`(list @tas)`~[%mime %m4a]) !>((kin:hc %m4a)))
   ==
 ::
 ++  test-splt
@@ -141,6 +151,15 @@
     %+  expect-eq
       !>(`(unit [@ta @tas])``[~.archive-tar %gz])
     !>((splt:hc 'archive.tar.gz'))
+    %+  expect-eq
+      !>(`(unit [@ta @tas])``[~.photo--one--- %heic])
+    !>((splt:hc 'Photo_(one)😀é.HEIC'))
+    %+  expect-eq
+      !>(`(unit [@ta @tas])``[~.my-script %sh])
+    !>((splt:hc 'My_Script.SH'))
+    %+  expect-eq
+      !>(`(unit [@ta @tas])``[~.name %s-h])
+    !>((splt:hc 'Name.S_H'))
     (expect-eq !>(`(unit [@ta @tas])`~) !>((splt:hc 'noext')))
     (expect-eq !>(`(unit [@ta @tas])`~) !>((splt:hc '.hidden')))
     (expect-eq !>(`(unit [@ta @tas])`~) !>((splt:hc 'trailing.')))

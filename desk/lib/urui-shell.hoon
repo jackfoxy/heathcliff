@@ -653,6 +653,7 @@
   |=  =action:urui
   ^-  @t
   ?-  action
+    %new      'New File'
     %open     'Open…'
     %save     'Save'
     %save-as  'Save As…'
@@ -668,6 +669,7 @@
   ^-  tape
   =/  thing=tape  (trip noun)
   ?-  action
+    %new      "Create a new {thing} draft"
     %open     "Open a saved {thing}"
     %save     "Save this {thing}"
     %save-as  "Save this {thing} as a new file"

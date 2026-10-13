@@ -45,6 +45,10 @@ const server=http.createServer(async(req,res)=>{
  if(route.startsWith('/heathcliff/ace/')){const file=root+'/desk/web/ace/'+route.split('/').pop();if(fs.existsSync(file))return send('text/javascript',fs.readFileSync(file));}
  if(route.startsWith('/heathcliff/raw/')) {
   const mark=route.split('/').pop();
+  if(mark==='txt'){
+   res.setHeader('Content-Disposition','attachment; filename="'+route.split('/').at(-2)+'.txt"');
+   return send('text/plain','download fixture');
+  }
   if(mark==='wav'||mark==='mime')return send('audio/wav',wav);
   if(mark==='png')return send('image/png',fs.readFileSync(root+'/desk/favicon.png'));
   if(mark==='webm')return send('video/webm',fs.readFileSync(path.join(__dirname, 'fixtures/sample.webm')));
@@ -84,7 +88,7 @@ const server=http.createServer(async(req,res)=>{
    uploadChecks.push(data);
    const dot=data.filename.lastIndexOf('.'),name=data.filename.slice(0,dot),mark=data.filename.slice(dot+1);
    if(name==='slow')await new Promise(resolve=>setTimeout(resolve,500));
-   return send('application/json',JSON.stringify({ok:true,clay:'/'+[...data.path.slice(2),name,mark].join('/'),mark,exists:name==='existing',install:[],problems:['txt','md','png'].includes(mark)?[]:['Unsupported mark: '+mark]}));
+   return send('application/json',JSON.stringify({ok:true,clay:'/'+[...data.path.slice(2),name,mark].join('/'),mark,exists:name==='existing',install:[],problems:['txt','sh','md','png','heic','m4a'].includes(mark)?[]:['Unsupported mark: '+mark]}));
   }
   if(data.op==='markdown'){
    if(data.text==='slow')await new Promise(r=>setTimeout(r,200));
@@ -108,28 +112,43 @@ const bindings=[['urui','desk/sur/urui.hoon'],['dock','desk/sur/docket.hoon'],['
  let compiled;
  try{
    compiled=require('child_process').spawnSync(findVere(),['eval'],{
-     input:program,stdio:['pipe',outputFile,outputFile],timeout:180000
+     input:program,stdio:['pipe',outputFile,outputFile],
+     timeout:Number(process.env.HOON_EVAL_TIMEOUT_MS || 180000)
    });
  }finally{fs.closeSync(outputFile)}
  const output=fs.readFileSync(outputPath,'utf8');
  if(compiled.error)throw compiled.error;
  assert.equal(compiled.status,0,output);
- const assets=parseCords(output,4);
+ let assets;
+ try { assets=parseCords(output,4); }
+ catch (error) { throw new Error(`${error.message}\n${output.slice(-6000)}`); }
  assert(assets[0].includes('</html>'));
  new (require('vm').Script)(assets[2]);
  new (require('vm').Script)(assets[3]);
  ['page.html', 'app.css', 'app.js', 'ace.js'].forEach((name, i) =>
    fs.writeFileSync(path.join(cache, 'heathcliff-' + name), assets[i]));
  js = assets[2].replace('  loadRoots();\n  renderResult();',
-   'window.hcTest = {openAttributes, renderers, cleanResult, runtime, attributeTargets, setSelected}; loadRoots();');
+   'window.hcTest = {openAttributes, renderers, cleanResult, runtime, attributeTargets, setSelected, zipArchive}; loadRoots();');
  assert(js.includes('window.hcTest'));
 
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const browser=await chromium.launch({headless:true});
  try{
+ await require('./delete-tombstone.cjs')(browser, `http://127.0.0.1:${server.address().port}`);
+ await require('./tree-mutations.cjs')(browser, `http://127.0.0.1:${server.address().port}`);
+ await require('./new-file.cjs')(browser, `http://127.0.0.1:${server.address().port}`);
+ await require('./folder-upload.cjs')(browser, `http://127.0.0.1:${server.address().port}`);
+ await require('./tree-transfers.cjs')(browser, `http://127.0.0.1:${server.address().port}`);
+ await require('./zip-download.cjs')(browser, `http://127.0.0.1:${server.address().port}`);
  const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(`http://127.0.0.1:${server.address().port}/heathcliff`);
  await page.waitForFunction(()=>window.hcTest);
+ assert.deepEqual(await page.evaluate(()=>{
+   const body=document.createElement('div');
+   window.hcTest.renderers.m4a({path:['base','now','song','m4a']},body);
+   const audio=body.querySelector('audio');
+   return {audio:!!audio,controls:audio?.controls,src:audio?.getAttribute('src')};
+ }),{audio:true,controls:true,src:'/heathcliff/raw/base/now/song/m4a'});
  for(const [mark,expected] of [['wav','8000 Hz'],['webm','V_VP8'],['mov','AVC'],['png','32 px'],['mime','PCM'],['svg','40 px']]){
   await page.evaluate(mark=>window.hcTest.openAttributes(['base','now','sample',mark],'file'),mark);
   await page.waitForFunction(()=>!document.querySelector('.hc-attributes:not([hidden]) .hc-attributes-body').textContent.includes('Reading file metadata'),null,{timeout:30000});
@@ -187,6 +206,12 @@ await window.hcTest.openAttributes(['base','now','sample','wav'],'file');window.
  const openMenu = () => page.evaluate(() => window.hcTest.runtime.explorer.context.open(
    'clay', ['base','now','sample','png'], document.getElementById('apps-tab'),
    undefined, {entry:'file',view:'apps',tomb:false}));
+ await openMenu();
+ assert.equal(await page.getByRole('menuitem', {name:'Delete',exact:true}).count(),1);
+ await page.evaluate(() => window.hcTest.runtime.explorer.context.open(
+   'clay', ['base','3','sample','png'], document.getElementById('apps-tab'),
+   undefined, {entry:'file',view:'apps',tomb:false}));
+ assert.equal(await page.getByRole('menuitem', {name:'Tombstone',exact:true}).count(),1);
  await openMenu();
  assert.equal(await page.getByRole('menuitem', {name:'Attributes…',exact:true}).count(),1);
  assert.equal(await page.getByRole('menuitem', {name:'File attributes…',exact:true}).count(),0);
@@ -374,7 +399,8 @@ const body=document.querySelector('#result-view');body.replaceChildren();await w
  await page.locator('#settings').click();
  assert(await page.getByRole('radio',{name:'Apps upload to /data/',exact:true}).isChecked());
  await page.locator('#close-settings').click();
- const checkUpload = async (path, view, expected, submit=false) => {
+ const checkUpload = async (path, view, expected, submit=false,
+   filename='note.txt', normalized=filename) => {
    await page.evaluate(({path,view}) => {
      const {runtime} = window.hcTest;
      const target = {path,entry:'directory',view};
@@ -382,16 +408,24 @@ const body=document.querySelector('#result-view');body.replaceChildren();await w
      runtime.explorer.context.open('clay',path,
        document.getElementById(view+'-tab'),undefined,target);
    },{path,view});
-   const chooser = page.waitForEvent('filechooser');
    await page.getByRole('menuitem',{name:'Upload…',exact:true}).click();
-   await (await chooser).setFiles({name:'note.txt',mimeType:'text/plain',buffer:Buffer.from('hello')});
    await page.locator('#hc-upload').waitFor({state:'visible'});
+   assert(await page.locator('#hc-upload-path').evaluate(input=>input.readOnly));
+   assert.equal(await page.locator('#hc-upload-path').inputValue(),
+     '/'+[expected[0],...expected.slice(2),''].join('/'));
+   const chooser = page.waitForEvent('filechooser');
+   await page.locator('#hc-upload-choose').click();
+   await (await chooser).setFiles({name:filename,mimeType:'text/plain',buffer:Buffer.from('hello')});
+   await page.waitForFunction(()=>!document.getElementById('hc-upload-confirm').disabled);
    assert.deepEqual(uploadChecks.at(-1).path,expected);
+   assert.equal(uploadChecks.at(-1).filename,normalized);
    if(submit){
+     assert(await page.locator('#hc-upload-confirm').isEnabled());
      const response = page.waitForResponse(r=>r.url().includes('/heathcliff/upload/'));
      await page.locator('#hc-upload-confirm').click();
      await response;
      assert.equal(uploadPosts.at(-1),'/heathcliff/upload/'+expected.join('/'));
+     assert(uploadBodies.at(-1).includes(`filename="${normalized}"`));
    }
    await page.locator('#hc-upload-cancel').click();
  };
@@ -399,6 +433,12 @@ const body=document.querySelector('#result-view');body.replaceChildren();await w
  await checkUpload(['base','now','notes'],'apps',['base','now','data','notes']);
  await checkUpload(['base','now','data','notes'],'apps',['base','now','data','notes']);
  await checkUpload(['base','now','data','notes'],'data',['base','now','data','notes']);
+ await checkUpload(['base','now'],'apps',['base','now','data'],true,
+   'My_(Photo)😀.HEIC','my--photo--.heic');
+ await checkUpload(['base','now'],'apps',['base','now','data'],true,
+   'My_Script.SH','my-script.sh');
+ await checkUpload(['base','now'],'apps',['base','now','data'],true,
+   'Track_01.M4A','track-01.m4a');
  await page.locator('#settings').click();
  await page.getByRole('radio',{name:'Apps upload to /',exact:true}).check();
  await page.locator('#close-settings').click();
@@ -456,15 +496,15 @@ const body=document.querySelector('#result-view');body.replaceChildren();await w
  await destination.fill('/base/data/');
  await slowResponse;
  assert(await page.locator('#hc-upload-confirm').isDisabled());
- await destination.fill('/other/data/new-folder/renamed/txt');
+ await destination.fill('/other/data/new-folder/Renamed_(file)😀/TXT');
  await page.waitForFunction(()=>!document.getElementById('hc-upload-confirm').disabled);
  assert.deepEqual(uploadChecks.at(-1).path,['other','now','data','new-folder']);
- assert.equal(uploadChecks.at(-1).filename,'renamed.txt');
+ assert.equal(uploadChecks.at(-1).filename,'renamed--file--.txt');
  const sent=page.waitForResponse(response=>response.url().includes('/heathcliff/upload/'));
  await page.locator('#hc-upload-confirm').click();
  await sent;
  assert.equal(uploadPosts.at(-1),'/heathcliff/upload/other/now/data/new-folder');
- assert(uploadBodies.at(-1).includes('filename="renamed.txt"'));
+ assert(uploadBodies.at(-1).includes('filename="renamed--file--.txt"'));
  await page.locator('#hc-upload-cancel').click();
  await page.locator('#settings').click();
  await page.getByRole('radio',{name:'Apps upload to /',exact:true}).check();
@@ -484,7 +524,7 @@ const body=document.querySelector('#result-view');body.replaceChildren();await w
  docsEnabled=true;
  await page.locator('#help').click();
  await page.waitForFunction(()=>!document.getElementById('docs-help-content').hidden);
- const topics=[['keyboard-shortcuts','Keyboard Shortcuts'],['users-guide','Users Guide'],['about','About Heathcliff and Ace editor']];
+ const topics=[['keyboard-shortcuts','Keyboard Shortcuts'],['users-guide','Users Guide'],['reference','Reference'],['about','About Heathcliff and Ace editor']];
  assert.deepEqual(await page.locator('#docs-help-nav a').allTextContents(),topics.map(([,title])=>title));
  for(const [slug,title] of topics){
   if(!(await page.locator('#docs-help-content').isVisible()))await page.locator('#help').click();

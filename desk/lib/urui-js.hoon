@@ -3033,6 +3033,7 @@
   //   activate(tab, choices)            domain reaction to a switch
   //   afterActivate(tab, choices)       the same, after render and save
   //   label(tab)                       optional exact tab label
+  //   saveDialog(tab)                  extra options for the save path dialog
   //   beforeSave(tab, {path})           false cancels; {path, base} redirects
   //   loaded(tab), saved(tab)           keep app data in step
   //
@@ -4150,15 +4151,13 @@
     if (docPaneReadOnly(name)) return undefined;
     const tab = docCapture(name);
     if (!tab) return undefined;
-    if (!tab.path && !tab.text) {
-      notify(`Nothing to save in ${tab.label}.`);
-      return undefined;
-    }
     //  a tab from an app-written root saves nowhere, by any route
     if (tab.path && !docTabCanSave(name, tab)) return undefined;
     let path = tab.path;
     if (choices.as || !path) {
-      path = await docFileDialog({mode: 'save', store: name, tab});
+      path = await docFileDialog({
+        ...docHooks(name).saveDialog?.(tab), mode: 'save', store: name, tab
+      });
       if (!path) return undefined;
     }
     let prepared;
@@ -4218,21 +4217,37 @@
   }
 
   //  Tabs open on a deleted path keep their text as unsaved drafts.
-  async function docRemove(name, path) {
+  //  Confirmed batches can skip per-file prompts; quiet batches aggregate
+  //  errors and refresh trees themselves, but still update successful tabs.
+  async function docRemove(name, path, choices = {}) {
     if (!Array.isArray(path) || docPaneReadOnly(name)) return false;
-    if (!await confirmDialog('delete', {path: pathText(path)})) return false;
-    docEvent(name, 'delete', 'start', path);
+    if (!choices.confirmed && !await confirmDialog('delete-file', {
+      message: `Delete ${pathText(path)}? This creates a new revision ` +
+        'without this file. Earlier revisions keep it.'
+    })) return false;
+    if (!choices.quiet) docEvent(name, 'delete', 'start', path);
     try {
       await docTransport.remove(path, {});
     } catch (cause) {
+      if (choices.quiet) throw cause;
       docFailed(name, 'delete', path, cause);
       return false;
     }
-    docEvent(name, 'delete', 'done', path);
+    if (!choices.quiet) docEvent(name, 'delete', 'done', path);
     const label = docBaseLabel(name, path);
+    docDeleted(name, [path]);
+    if (!choices.quiet) {
+      notify(`Deleted ${label}.`);
+      docRefreshTrees(name);
+    }
+    return true;
+  }
+
+  //  Apply confirmed server deletions locally, without another transport call.
+  function docDeleted(name, paths) {
+    docCapture(name);
     for (const tab of docTabs(name)) {
-      if (!samePath(tab.path, path)) continue;
-      if (tab.id === documentActiveId(name)) docCapture(name);
+      if (!paths.some(path => samePath(tab.path, path))) continue;
       tab.path = null;
       tab.draft = tab.label;
       tab.clean = '';
@@ -4243,9 +4258,6 @@
     docShow(name);
     docRender(name);
     changed();
-    notify(`Deleted ${label}.`);
-    docRefreshTrees(name);
-    return true;
   }
 
   //  ---- the tree
@@ -4668,7 +4680,13 @@
       accept();
     };
     showModal(docFileModal, opening ? cancel : pathInput);
-    fillList();
+    if (request.browse && !opening) {
+      list.hidden = true;
+      extra.append(request.browse((value) => {
+        pathInput.value = value;
+        error.hidden = true;
+      }));
+    } else fillList();
     return done;
   }
 
@@ -4825,6 +4843,7 @@
   function documentsWire() {
     if (!filesConfig) return;
     const run = {
+      new: (name) => docCreate(name, {focus: true}),
       open: (name) => docOpen(name),
       save: (name) => docSave(name),
       'save-as': (name) => docSave(name, {as: true}),
@@ -4874,6 +4893,7 @@
     open: docOpen,
     save: docSave,
     remove: docRemove,
+    deleted: docDeleted,
     dirty: docDirty,
     addRef: docAddRef,
     editor: (name) => docEditorsByStore.get(name),

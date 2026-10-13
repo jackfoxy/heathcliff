@@ -323,6 +323,8 @@
 ::
 ++  remove
   ::  A delete at `rel`, after reading what clay holds there.
+  ::  Without a base hash, existence is enough: deleting must not need
+  ::  to decode content or compile the file's mark.
   |=  $:  =policy
           =bowl:gall
           eyre-id=@ta
@@ -335,6 +337,16 @@
   ?^  current  [(refuse eyre-id busy) current]
   =/  where=(each location failure)  (resolve policy bowl rel)
   ?:  ?=(%| -.where)  [(refuse eyre-id p.where) current]
+  ?.  write.p.where  [(refuse eyre-id read-only) current]
+  ?~  base
+    =/  found=(each arch tang)
+      %-  mule  |.
+      .^(arch %cy (en-beam beak.p.where rel.p.where))
+    ?:  ?=(%| -.found)
+      :_  current
+      %+  refuse  eyre-id
+      (fail-with %internal 500 'clay delete check failed' p.found)
+    (plan-delete policy bowl eyre-id rel ~ ?~(fil.p.found ~ `''))
   =/  held=(each (unit [text=@t readonly=?]) tang)
     (stored policy bowl p.where codec)
   ?:  ?=(%| -.held)

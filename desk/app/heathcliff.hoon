@@ -9,6 +9,7 @@
 /+  uhttp=urui-http, ufiles=urui-files
 /+  hp=heathcliff-perm, ht=heathcliff-transfer, ha=heathcliff-api
 /+  hc=heathcliff-clay, web=heathcliff-web
+/+  hd=heathcliff-batch-delete
 /*  fav         %png  /favicon/png
 /*  logo        %png  /heathcliff/png
 /*  ace-core    %js   /web/ace/ace/js
@@ -26,6 +27,7 @@
 /*  media-wasm  %atom  /web/mediainfo/module/atom
 /*  media-lic   %txt  /web/mediainfo/license/txt
 ::
+=+
 |%
 ::  +|  State
 ::
@@ -170,6 +172,8 @@
   [cards.done next.done]
 --
 ::
+::  Request-local batch state is not part of the saved state schema.
+=|  batch=(unit pending:hd)
 =|  state-0
 =*  state  -
 ::
@@ -192,7 +196,7 @@
   |=  ole=vase
   ^-  (quip card _this)
   =/  old=state-0  !<(state-0 ole)
-  [mirror:hp this(state old(files ~, load ~))]
+  [mirror:hp this(state old(files ~, load ~), batch ~)]
 ::
 ++  on-poke
   |=  [=mark =vase]
@@ -231,7 +235,19 @@
       [(give eyre-id [[404 ~] `(as-octs:mimes:html 'not found')]) this]
     [(give eyre-id (respond:uhttp 200 u.found)) this]
   ?.  authenticated.req  [(refused eyre-id) this]
+  ?:  =(~[%delete-tree] rest)
+    ?:  !=(~ batch)  [(refuse:ufiles eyre-id busy:ufiles) this]
+    =^  cards  batch
+      (handle:hd bowl eyre-id req |(?=(^ files.state) ?=(^ load.state)))
+    [cards this]
   ?:  =(~[%files] rest)
+    =/  parsed=(each file-op:ufiles failure:ufiles)
+      (parse-request:ufiles file-policy:web req)
+    ?:  ?&  ?=(^ batch)
+            ?=(%& -.parsed)
+            ?=(?(%save %delete) -.p.parsed)
+        ==
+      [(refuse:ufiles eyre-id busy:ufiles) this]
     ?:  (empty-browse req)
       [(reply:ufiles eyre-id (ok-json:ufiles ~[['entries' a+~]])) this]
     =^  cards  files.state
@@ -242,6 +258,7 @@
   ?:  =(~[%tomb] rest)
     [(tomb bowl eyre-id req) this]
   ?:  ?=([%upload @ %now *] rest)
+    ?^  batch  [(refuse:ufiles eyre-id busy:ufiles) this]
     =^  cards  load.state
       (upload bowl eyre-id i.t.rest t.t.t.rest req load.state)
     [cards this]
@@ -284,6 +301,10 @@
   ?:  ?=([%tomb %clay ~] wire)  [~ this]
   =/  tombed=(unit (list card))  (tomb-take:ht bowl wire sign-arvo)
   ?^  tombed  [u.tombed this]
+  =/  deleted=(unit outcome:hd)  (take:hd bowl wire sign-arvo batch)
+  ?^  deleted
+    =.  batch  next.u.deleted
+    [cards.u.deleted this]
   =/  file=(unit outcome:ufiles)
     (take:ufiles file-policy:web bowl wire sign-arvo files.state)
   ?^  file

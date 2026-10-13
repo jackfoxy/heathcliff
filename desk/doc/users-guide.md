@@ -6,8 +6,8 @@ and upload files, and manage read and write permissions.
 
 Open it at `/heathcliff` on your ship. You must be logged in.
 
-**Help** lists Keyboard Shortcuts, About Heathcliff and Ace editor, and
-this Users Guide from the desk's `doc.toc`. Select a topic to open it in a
+**Help** lists Keyboard Shortcuts, this Users Guide, Reference, and
+About Heathcliff and Ace editor from the desk's `doc.toc`. Select a topic to open it in a
 documentation tab in the reference pane. These tabs are remembered in this
 browser. If the ship does not serve `/docs`, Help shows a short built-in
 guide instead.
@@ -40,7 +40,7 @@ the two differ, the desk name follows in grey, as `%desk`.
 
 A file whose stored data has been tombstoned at the revision shown is
 listed as `name.mark (tombstoned)`; it cannot be opened, downloaded or
-deleted again, though Attributes… still works.
+tombstoned again, though Attributes… still works.
 
 Folders come before files, both sorted by name. A file shows as
 `name.mark`: Clay has no file extensions, so `/app/dojo/hoon` is the file
@@ -67,7 +67,7 @@ its valid range, and nothing changes.
 
 ## Editing
 
-Text files open editable: txt, csv, tab, md, pem, hoon, css, js, html, svg,
+Text files open editable: txt, sh, csv, tab, md, pem, hoon, css, js, html, svg,
 xml, udon, umd, map and json. Four structured marks edit as the text their
 mark prints and parses: bill, docket-0, kelvin and ship. Saving converts
 the text through the desk's own mark, so the saved file may come back in
@@ -91,8 +91,12 @@ or a printed noun, and the result pane shows the preview. A file whose
 stored data does not match what its mark name suggests (for example an old
 `md` stored as a single cord) also opens read-only.
 
-A new, empty tab is a draft. Saving it asks for a path typed as
-`desk/now/folder/name.mark`, for example `base/now/notes/todo.txt`.
+Click New File, to the left of Save, to open an empty draft without
+closing your other tabs. Save opens a destination requestor: expand a desk
+and its folders to fill a partial path, then type new folders and a filename
+with its mark. For example, `base/now/notes/todo.txt`. Selecting an existing
+file fills its complete path; replacing it requires confirmation. Cancel
+keeps the draft. Empty files can also be saved.
 
 ## The result pane
 
@@ -122,14 +126,40 @@ Right-click any desk, folder or file, use its **…** button, or focus it and
 press Shift+F10 or the context-menu key:
 
 - **Open** a file.
-- **Download** a file.
+- **Download…** a file, or a desk/folder tree into a local folder.
 - **Attributes…** for file, desk, or folder information.
 - **Permissions…** for read and write rules and crews.
 - **Upload…** into a desk or folder at now.
-- **Delete** a file's version at an older revision (see below). Disabled
-  at now: Heathcliff does not delete current files.
+- **Delete** a current file, or recursively delete files under a desk/partial path.
+- **Tombstone** the stored content of a file or partial tree at a prior revision (see below).
 - **Now** and **Revision…**: browse the item's desk at now, or at a
   revision you choose.
+
+### Delete/Tombstone on partial paths
+
+On a current desk or folder, **Delete** applies to every listed file under
+that partial path, including subfolders. On a prior revision, **Tombstone**
+applies to that revision's files instead. The confirmation shows the path,
+revision and file count, and warns that the operation may be partially
+successful: files that cannot be deleted/tombstoned are left as is while
+the remaining files are still attempted. Cancel changes nothing.
+
+Delete checks the captured files, skips files that cannot be deleted, and
+commits all eligible deletions together in **one new revision**. If no files
+are eligible, no revision is created. If the commit fails, none of its files
+are deleted. Earlier revisions remain. Successful current-file tabs become unsaved drafts, preserving
+editor text. Failed files and historical tabs keep their paths. The file
+list is captured before confirmation, so newly added paths are not included.
+
+Tombstoning remains permanent and may also discard identical content at
+other historical paths/revisions. Content used by any current file remains
+protected. Already-tombstoned files are skipped, including shared content
+removed by an earlier successful tombstone in the same batch.
+
+The final report shows successes, failures/unconfirmed results, and skipped
+tombstones, with per-file errors. Successful changes are not rolled back.
+After a connection or verification error, refresh the affected tree before
+retrying: the batch may have reached the ship without confirmation.
 
 ## File and path attributes, and permissions
 
@@ -184,10 +214,17 @@ Two limits come from Clay itself:
   rules but never checks them. Treat a write rule as a record, not as
   protection.
 
-## Deleting from history
+## Deleting and tombstoning
+
+**Delete** is available on files and partial paths at now. For one file, it commits a
+new desk revision without the selected file. Other files stay in place,
+and earlier revisions still contain the deleted file. The revision number
+advances after Clay confirms the deletion. Open tabs for the current file
+keep their text as unsaved drafts; historical tabs keep their revision.
+Cancelling or a failed deletion leaves the tabs unchanged.
 
 Clay's history cannot be rewritten: an old revision always lists its
-files. What can go is the stored content of a version. **Delete**, on a
+files. What can go is the stored content of a version. **Tombstone**, on a
 file opened at an older revision, tombstones that content after you
 confirm. Heathcliff then reloads the listing.
 
@@ -197,7 +234,9 @@ confirm. Heathcliff then reloads the listing.
   revision still uses that content.
 - It cannot be undone.
 
-Delete is disabled at now. To remove a current file, use the dojo.
+Tombstone is available only on prior revisions. It fails if the selected
+version has the same content as the current file, including an unchanged
+file at an older revision. Tombstoning does not create a new revision.
 
 ## Uploading
 
@@ -209,9 +248,34 @@ path progressively. You can type a new folder or filename and choose a
 different desk. Press **Choose file…** to select the local file. The
 destination's mark is checked before Upload is enabled.
 
-The **Upload…** context-menu action uses the selected desk or folder at
-now and immediately opens the local file chooser. It keeps the local
-filename and its mark. Cancelling the chooser does nothing.
+Uploaded filenames are lowercased; characters outside `a-z`, `0-9`, and
+`-` become `-`. The final dot separates the filename from its mark.
+This applies to single-file uploads, typed destination filenames, and
+files and subfolder names in folder uploads. For example,
+`My_Script.SH` becomes `my-script.sh`.
+
+**Choose folder…**, below **Choose file…**, selects all files in a local
+folder, including its subfolders. Set a partial destination such as
+`/base/data/notes/`. The selected folder's contents go directly there:
+`local/readme.txt` becomes `/data/notes/readme/txt`, and
+`local/subfolder/photo.png` becomes `/data/notes/subfolder/photo/png`.
+The selected top-level folder's name is not added. Names are lowercased
+and unsupported characters become hyphens; conflicting normalized paths
+are rejected. Empty folders have no files to upload and are not created.
+
+All files are checked before Upload is enabled. Confirm replacement of
+existing files and installation of missing marks when prompted. Files are
+uploaded sequentially, with a separate verified commit per file. A failure
+stops the remaining uploads and reports how many succeeded; earlier
+uploads remain. Cancel stops subsequent files, but an upload already sent
+may still complete. Check the destination before retrying a failed batch.
+
+The **Upload…** context-menu action opens the same requestor with the
+selected desk or folder at now frozen as its destination. Choose either
+**Choose file…** or **Choose folder…**. Single files keep their normalized
+local filename and mark; folders append their contents and subfolder paths.
+The destination cannot be edited or browsed in this requestor. Cancelling
+without Upload leaves the desk unchanged.
 
 In **Settings → Apps uploads**, choose **Apps upload to /data/**
 (the default) or **Apps upload to /**. This preference is saved in this
@@ -231,11 +295,24 @@ shows where the file will go and anything that needs a decision:
   cannot convert uploads into (hymn, jam, noun, snip, txt-diff, urb), or a
   file ending in NUL bytes under a mark that would drop them.
 
-The upload is committed in one step, together with any marks it needs, and
+Each file is committed in one step, together with any marks it needs, and
 confirmed only once Clay reads it back intact. The file then opens in a tab.
+Folder uploads refresh the tree without opening a tab for every file.
 QuickTime `.mov` uploads preserve their full byte length, including trailing
 NUL bytes. They display video and MediaInfo attributes; playback depends on
 the browser's support for the movie's codecs.
+
+ZIP (`.zip`) and RAR (`.rar`) archives can be uploaded and downloaded without
+losing trailing NUL bytes. They are stored as binary archives, not extracted
+or editable as text.
+
+Shell scripts (`.sh`) behave like `.txt`: editable text with text diffs,
+never executed by Heathcliff. HEIC images (`.heic`) behave like `.png`:
+binary image data, with a preview when the browser can display it. Like PNG,
+HEIC uploads ending in NUL bytes are refused to prevent loss of those bytes.
+
+M4A (`.m4a`) uses the same binary storage as MP4, with an audio preview and
+`audio/mp4` downloads. Like MP4, uploads ending in NUL bytes are refused.
 
 ### Marks Heathcliff copies into your desks
 
@@ -261,9 +338,37 @@ marks*. The dialog lists each mark it would copy and where from.
 
 ## Downloading
 
-**Download…**, immediately left of **Upload…** in the toolbar, saves the
+**Download…**, immediately left of **New File** above the source editor, saves the
 active file at its selected revision. It is disabled for unsaved drafts.
-The item's context menu also offers **Download**.
+The file's context menu also offers **Download…** for a single-file download.
+
+On a desk or partial path, **Download…** asks for a local destination folder
+and downloads every available file in that tree. The selected path's
+contents go directly into that folder, with subpaths created as subfolders:
+`/data/notes/sub/photo/png` downloaded from `/data/notes` becomes
+`sub/photo.png`. This is the inverse of folder upload; the selected tree's
+root name is not added. Direct folder writing requires directory-picker
+support over HTTPS or localhost. Grant write access when prompted.
+
+On ordinary HTTP, or when the browser has no directory picker,
+**Download…** automatically downloads a ZIP instead. It preserves the same
+subfolder paths; extract it into your desired destination. Your browser's
+usual download settings determine where the ZIP is saved. ZIP preparation
+and completion messages are green, like direct download progress.
+The ZIP stores files without compression and is assembled in the browser,
+with a 256 MiB archive limit and at most 65,534 files. Download smaller
+subtrees if a limit is exceeded. A failed ZIP operation downloads no partial
+archive. Cancelling or denying an available folder picker does not trigger
+a ZIP download.
+
+A current tree is pinned to one revision for the entire download; a
+historical tree uses its selected revision. Tombstoned files are skipped
+and counted. Existing local files require overwrite confirmation. Cancel
+at that confirmation stops the remaining files without changing the
+existing file. Errors also stop the batch and report how many files were
+saved; earlier downloads remain. Conflicting external filenames are
+reported instead of silently replacing an earlier file in the batch.
+Clay has no empty folders to download.
 
 The download is the file's external form, its mark's own conversion to bytes:
 most files come back exactly as stored, a `mime` file as its stored bytes,

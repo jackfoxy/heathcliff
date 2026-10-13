@@ -225,17 +225,23 @@
   |=  [=bowl:gall eyre-id=@ta wire=path]
   ^-  (each (list card:agent:gall) @t)
   ?.  ?=([@ @ ^] wire)  [%| 'a path names its desk, revision and file']
-  ?:  =(%now i.t.wire)  [%| 'only a file at an older revision is deleted']
+  ?:  =(%now i.t.wire)  [%| 'only a prior revision can be tombstoned']
   ?.  (~(has in (desks:hc bowl)) i.wire)  [%| 'no such desk']
+  =/  head=@ud  (head-rev:hc bowl i.wire)
   =/  cas=(unit case)
-    (read-case:hc bowl i.t.wire (head-rev:hc bowl i.wire))
+    (read-case:hc bowl i.t.wire head)
   ?~  cas  [%| 'no such revision of that desk']
+  ?:  =(ud+head u.cas)  [%| 'only a prior revision can be tombstoned']
   =/  full=path  (en-beam [our.bowl i.wire u.cas] t.t.wire)
-  =/  =arch  .^(arch %cy full)
-  ?~  fil.arch  [%| 'no file at that path in that revision']
+  =/  selected=arch  .^(arch %cy full)
+  ?~  fil.selected  [%| 'no file at that path in that revision']
   ?.  (live:hc bowl full)  [%| 'that version is already tombstoned']
+  =/  current=arch
+    .^(arch %cy (en-beam [our.bowl i.wire da+now.bowl] t.t.wire))
+  ?:  =(fil.selected fil.current)
+    [%| 'this version has the same content as the current file']
   :-  %&
-  :~  [%pass /tomb/clay %arvo %c %tomb %lobe u.fil.arch]
+  :~  [%pass /tomb/clay %arvo %c %tomb %lobe u.fil.selected]
       [%pass [%tomb %check eyre-id full] %arvo %b %wait now.bowl]
   ==
 ::
@@ -349,9 +355,10 @@
   |=  type=mite
   ^-  (unit @ta)
   =/  known=(list mark)
-    :~  %png  %jpg  %gif  %svg  %webp  %bmp  %ico  %tiff  %txt  %html
+    :~  %png  %heic  %jpg  %gif  %svg  %webp  %bmp  %ico  %tiff  %txt  %html
         %css  %js  %json  %xml  %csv  %md  %pdf  %mp3  %wav  %ogg  %flac
-        %aac  %mov  %mp4  %webm  %mpeg  %ttf  %otf  %woff2  %wasm
+        %aac  %mov  %mp4  %webm  %mpeg  %ttf  %otf  %woff2  %wasm  %zip  %rar
+        %m4a
     ==
   |-  ^-  (unit @ta)
   ?~  known  ~

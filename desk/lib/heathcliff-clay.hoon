@@ -36,7 +36,7 @@
   ::    on %base but a cord on desks %docs serves, so it goes through
   ::    the mark on the file's own desk too.
   ^-  (list [mark=@tas =codec:ufiles])
-  :~  [%txt %wain]  [%csv %wain]  [%tab %wain]  [%pem %wain]
+  :~  [%txt %wain]  [%sh %wain]  [%csv %wain]  [%tab %wain]  [%pem %wain]
       [%hoon %cord]  [%css %cord]  [%js %cord]  [%html %cord]
       [%svg %cord]  [%xml %cord]  [%udon %cord]  [%umd %cord]
       [%map %cord]  [%json %json]
@@ -53,6 +53,7 @@
   ^-  (unit mite)
   ?+  mark  ~
     %txt    `/text/plain
+    %sh     `/text/plain
     %hoon   `/text/x-hoon
     %css    `/text/css
     %js     `/text/javascript
@@ -68,6 +69,7 @@
     ::  '+' is not a knot character, so this cannot be a path literal
     %svg    [~ `mite`~['image' 'svg+xml']]
     %png    `/image/png
+    %heic   `/image/heic
     %jpg    `/image/jpeg
     %jpeg   `/image/jpeg
     %gif    `/image/gif
@@ -81,6 +83,7 @@
     %oga    `/audio/ogg
     %flac   `/audio/flac
     %aac    `/audio/aac
+    %m4a    `/audio/mp4
     %weba   `/audio/webm
     %mid    `/audio/midi
     %mp4    `/video/mp4
@@ -93,6 +96,8 @@
     %otf    `/font/otf
     %woff2  `/font/woff2
     %pdf    `/application/pdf
+    %zip    `/application/zip
+    %rar    [~ `mite`~['application' 'vnd.rar']]
     %pem    `/application/x-pem-file
     %wasm   `/application/wasm
     %jam    `/application/x-urb-jam
@@ -113,7 +118,7 @@
       %map  %md  %mid  %mov  %mp3  %mp4  %mpeg  %noun  %oga  %ogg  %ogv  %otf
       %pdf  %pem  %png  %ship  %snip  %story  %svg  %tab  %tiff  %ttf
       %txt  %udon  %umd  %urb  %wasm  %wav  %weba  %webm  %webp  %woff2
-      %xml
+      %xml  %zip  %rar  %heic  %sh  %m4a
   ==
 ::
 ++  grabs
@@ -128,7 +133,7 @@
       %hoon  %html  %ico  %jpeg  %jpg  %js  %json  %kelvin  %map  %md
       %mid  %mov  %mp3  %mp4  %mpeg  %oga  %ogg  %ogv  %otf  %pdf  %pem  %png
       %ship  %svg  %tab  %tiff  %ttf  %txt  %udon  %umd  %wav  %weba
-      %webm  %webp  %woff2  %xml
+      %webm  %webp  %woff2  %xml  %zip  %rar  %heic  %sh  %m4a
   ==
 ::
 ++  octs-marks
@@ -137,7 +142,7 @@
   ::    Every other byte mark stores a bare atom, which has no high
   ::    zeros: its +grow recomputes the length with +met.
   ^-  (set mark)
-  (silt `(list mark)`~[%mime %mov %otf %ttf %woff2])
+  (silt `(list mark)`~[%mime %mov %otf %ttf %woff2 %zip %rar])
 ::
 ::  +|  Paths
 ::
@@ -290,7 +295,7 @@
     ?(%mime %noun %txt)                                ~[mark]
     ?(%bill %docket-0 %hymn %kelvin %ship %snip %urb)  ~[%noun mark]
     %txt-diff                                          ~[%noun mark]
-    ?(%hoon %udon %umd)                                ~[%txt mark]
+    ?(%hoon %udon %umd %sh)                            ~[%txt mark]
   ==
 ::
 ++  missing
@@ -317,8 +322,8 @@
   |=  t=@t
   ^-  @ta
   %-  crip
-  %+  turn  (trip t)
-  |=  c=@tD
+  %+  turn  (tuba (trip t))
+  |=  c=@
   ^-  @tD
   ?:  &((gte c 'A') (lte c 'Z'))  (add c 32)
   ?:  ?|  &((gte c 'a') (lte c 'z'))
@@ -355,10 +360,10 @@
   ^-  @t
   =/  out=wain
     ?+  mark  (fallback mark stored)
-        ?(%png %jpg %jpeg %gif %bmp %ico %tiff %webp)
+        ?(%png %heic %jpg %jpeg %gif %bmp %ico %tiff %webp)
       (media mark stored "image")
     ::
-        ?(%mp3 %wav %ogg %oga %flac %aac %weba %mid)
+        ?(%mp3 %m4a %wav %ogg %oga %flac %aac %weba %mid)
       (media mark stored "audio")
     ::
         ?(%mov %mp4 %webm %ogv %mpeg %avi)

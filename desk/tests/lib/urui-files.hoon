@@ -824,6 +824,18 @@
     (expect-eq !>(500) !>((reply-status cards.bad)))
   ==
 ::
+++  test-delete-timeout-clears-pending-without-claiming-success
+  =/  [verify=wire write=wire timeout=wire]  (wires:ufiles id)
+  =/  out=outcome:ufiles
+    (need (take:ufiles policy bowl timeout wake `deleting))
+  ?>  ?=(^ cards.out)
+  ;:  weld
+    (expect-eq !>(504) !>((reply-status cards.out)))
+    (expect-eq !>('timeout') !>((error-code cards.out)))
+    (expect !>(=(~ next.out)))
+    (expect !>(?=([%pass * %arvo %c %warp %~zod %probe ~] i.cards.out)))
+  ==
+::
 ++  test-take-times-out-on-the-located-desk
   =/  [verify=wire write=wire timeout=wire]  (wires:ufiles id)
   =/  job=pending:ufiles  [~.req id %save /other/now/q1/txt `'x' until]

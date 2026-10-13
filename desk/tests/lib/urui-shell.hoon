@@ -870,6 +870,13 @@
     (expect-eq !>("copy-icon") !>((attribute (head icons) %class)))
   ==
 ::
+++  test-new-file-action
+  ;:  weld
+    (expect-eq !>('New File') !>((action-label:shell %new)))
+    %+  expect-eq  !>("Create a new File draft")
+    !>((action-tip:shell %new 'File'))
+  ==
+::
 ++  test-store-actions-carry-default-tooltips
   =/  ids=(list tape)  ~["note-open" "note-save" "note-display-preview"]
   %+  expect-eq

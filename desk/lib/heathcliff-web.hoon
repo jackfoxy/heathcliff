@@ -54,7 +54,7 @@
               starter=''
               roots=~[[~ ~ ~ &]]
               preview=~
-              actions=~[%save %copy]
+              actions=~[%new %save %copy]
               refs=|
               share=~
           ==
@@ -283,12 +283,12 @@
         =aria-describedby  "hc-tomb-message"
         ;div.help-card.hc-dialog-card
           ;div.pane-header
-            ;h2#hc-tomb-title: Delete from history
+            ;h2#hc-tomb-title: Tombstone from history
           ==
           ;p#hc-tomb-message;
           ;div.dialog-actions
             ;button#hc-tomb-cancel(type "button"): Cancel
-            ;button#hc-tomb-ok.danger-button(type "button"): Delete
+            ;button#hc-tomb-ok.danger-button(type "button"): Tombstone
           ==
         ==
       ==
@@ -320,6 +320,12 @@
         =type         "file"
         =tabindex     "-1"
         =aria-hidden  "true";
+      ;input#hc-upload-folder-input.hc-hidden
+        =type         "file"
+        =webkitdirectory  ""
+        =multiple     ""
+        =tabindex     "-1"
+        =aria-hidden  "true";
   ==
 ::
 ++  help
@@ -340,7 +346,7 @@
         ==
         ;p
           ; Right-click an item, or use its … button, for Download,
-          ; Attributes…, Permissions…, Upload… and Delete.
+          ; Attributes…, Permissions…, Upload…, Delete and Tombstone.
         ==
         ;h3: Keyboard
         ;ul.shortcut-list
@@ -456,6 +462,14 @@
   }
   .hc-file.hc-tomb { color: var(--muted); font-style: italic; }
   .hc-note { color: var(--muted); margin: 0.25rem 0.5rem; }
+  .hc-upload-progress,
+  #urui-toast[data-kind='upload'] #urui-toast-message,
+  #urui-toast[data-kind='download'] #urui-toast-message { color: #15803d; }
+  :root[data-effective-theme='dark'] .hc-upload-progress,
+  :root[data-effective-theme='dark']
+    #urui-toast[data-kind='upload'] #urui-toast-message,
+  :root[data-effective-theme='dark']
+    #urui-toast[data-kind='download'] #urui-toast-message { color: #4ade80; }
   .hc-error { color: var(--danger, #b42318); }
   .hc-result { display: grid; gap: 0.5rem; padding: 0.5rem; min-width: 0; }
   .hc-result-head {
@@ -1066,6 +1080,205 @@
       link.remove();
     }
 
+    // ZIP method 0 (stored): no dependency or secure-context API required.
+    // Local/central headers and CRC-32 follow PKWARE APPNOTE sections 4.3/4.4.
+    function zipArchive(maxBytes = 256 * 1024 * 1024, maxFiles = 65534) {
+      const parts = [], central = [];
+      let offset = 0, centralSize = 0;
+      const crcTable = Uint32Array.from({length: 256}, (_, value) => {
+        for (let bit = 0; bit < 8; bit += 1) {
+          value = (value >>> 1) ^ (value & 1 ? 0xedb88320 : 0);
+        }
+        return value >>> 0;
+      });
+      return {
+        async add(path, blob) {
+          const name = new TextEncoder().encode(path);
+          const size = blob.size;
+          if (central.length >= maxFiles || name.length > 65535) {
+            throw new Error('ZIP entry limit exceeded; download smaller subtrees.');
+          }
+          if (offset + centralSize + size + 76 + 2 * name.length + 22 > maxBytes) {
+            throw new Error('ZIP size limit exceeded (256 MiB); download smaller subtrees.');
+          }
+          let crc = 0xffffffff;
+          // Yield between chunks so progress remains responsive for large files.
+          for (let at = 0; at < size; at += 1024 * 1024) {
+            const bytes = new Uint8Array(await blob.slice(at, at + 1024 * 1024).arrayBuffer());
+            for (const byte of bytes) crc = (crc >>> 8) ^ crcTable[(crc ^ byte) & 255];
+          }
+          crc = (crc ^ 0xffffffff) >>> 0;
+          const local = new Uint8Array(30 + name.length);
+          const view = new DataView(local.buffer);
+          view.setUint32(0, 0x04034b50, true);
+          view.setUint16(4, 20, true);
+          view.setUint16(6, 0x800, true); // UTF-8 names, no data descriptor.
+          view.setUint16(12, 33, true); // Unknown date: 1980-01-01.
+          view.setUint32(14, crc, true);
+          view.setUint32(18, size, true);
+          view.setUint32(22, size, true);
+          view.setUint16(26, name.length, true);
+          local.set(name, 30);
+          const entry = new Uint8Array(46 + name.length);
+          const index = new DataView(entry.buffer);
+          index.setUint32(0, 0x02014b50, true);
+          index.setUint16(4, 20, true);
+          entry.set(local.subarray(4, 30), 6);
+          index.setUint32(42, offset, true);
+          entry.set(name, 46);
+          parts.push(local, blob);
+          central.push(entry);
+          offset += local.length + size;
+          centralSize += entry.length;
+        },
+        finish() {
+          const end = new Uint8Array(22);
+          const view = new DataView(end.buffer);
+          view.setUint32(0, 0x06054b50, true);
+          view.setUint16(8, central.length, true);
+          view.setUint16(10, central.length, true);
+          view.setUint32(12, centralSize, true);
+          view.setUint32(16, offset, true);
+          return new Blob([...parts, ...central, end], {type: 'application/zip'});
+        }
+      };
+    }
+
+    function downloadZip(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const link = make('a', {href: url, download: filename});
+      link.hidden = true;
+      document.body.append(link);
+      try { link.click(); }
+      finally {
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      }
+    }
+
+    let downloadingTree = false;
+    async function downloadTree(path) {
+      if (downloadingTree) {
+        runtime.notify('A folder download is already in progress.',
+          {kind: 'download'});
+        return;
+      }
+      const zip = typeof window.showDirectoryPicker === 'function'
+        ? null : zipArchive();
+      downloadingTree = true;
+      let completed = 0;
+      let total = 0;
+      let destination;
+      try {
+        // Open under the menu click's user activation, before any requests.
+        if (zip) {
+          runtime.notify('Folder picker unavailable; preparing a ZIP download…',
+            {kind: 'download', sticky: true});
+        } else {
+          try {
+            destination = await window.showDirectoryPicker({mode: 'readwrite'});
+          } catch (cause) {
+            if (cause.name === 'AbortError') return;
+            throw cause;
+          }
+        }
+        const [desk, selected, ...scope] = path;
+        let revision = selected;
+        if (revision === 'now') {
+          const roots = await api('roots');
+          const root = roots.roots.find(item => item.desk === desk);
+          if (!root) throw new Error('The selected desk no longer exists.');
+          revision = String(root.rev);
+        }
+        const listing = await api('tree', {desk, case: revision, scope});
+        const tombs = new Set(listing.tombs.map(file => JSON.stringify(file)));
+        const files = listing.paths.filter(file =>
+          !tombs.has(JSON.stringify(file)));
+        const skipped = listing.paths.length - files.length;
+        const safeName = name => typeof name === 'string' && name.length > 0
+          && name !== '.' && name !== '..'
+          && Array.from(name).every(char => char >= ' ' && char !== '/' && char !== ':'
+            && char.charCodeAt(0) !== 92 && char.charCodeAt(0) !== 127);
+        for (const file of files) {
+          if (!Array.isArray(file) || file.length < scope.length + 2
+              || !scope.every((part, i) => part === file[i])
+              || !file.every(safeName)) {
+            throw new Error('Invalid file path in the selected tree.');
+          }
+        }
+        total = files.length;
+        const written = new Set();
+        for (const file of files) {
+          runtime.notify(`${zip ? 'Preparing ZIP' : 'Downloading'} ${completed + 1}/${total} files…`,
+            {kind: 'download', sticky: true});
+          const response = await fetch(rawUrl([desk, revision, ...file], true));
+          if (!response.ok) {
+            throw new Error(`Cannot download /${file.join('/')} (${response.status}).`);
+          }
+          // Use the mark's external filename, including noun -> jam and mime.
+          const name = response.headers.get('content-disposition')
+            ?.match(/filename="([^"]+)"/)?.[1];
+          if (!safeName(name)) throw new Error('Invalid download filename.');
+          const folders = file.slice(scope.length, -2);
+          const relative = [...folders, name].join('/');
+          const key = relative.toLowerCase();
+          if (written.has(key)) {
+            throw new Error(`Files map to the same local destination: ${relative}`);
+          }
+          const bytes = await response.blob();
+          if (zip) {
+            await zip.add(relative, bytes);
+            written.add(key);
+            completed += 1;
+            continue;
+          }
+          let directory = destination;
+          for (const folder of folders) {
+            directory = await directory.getDirectoryHandle(folder, {create: true});
+          }
+          let handle;
+          try { handle = await directory.getFileHandle(name); }
+          catch (cause) { if (cause.name !== 'NotFoundError') throw cause; }
+          if (handle && !await runtime.confirm('exists', {
+            path: `Local file ${relative}`
+          })) {
+            runtime.notify(`Stopped after ${completed}/${total} downloads. ` +
+              'Previously downloaded files remain.',
+              {kind: 'download', sticky: true});
+            return;
+          }
+          if (!handle) handle = await directory.getFileHandle(name, {create: true});
+          const writer = await handle.createWritable();
+          try {
+            await writer.write(bytes);
+            await writer.close();
+          } catch (cause) {
+            try { await writer.abort(); } catch (_) {}
+            throw cause;
+          }
+          written.add(key);
+          completed += 1;
+        }
+        if (zip) {
+          const label = (scope.at(-1) || desk).replace(/[^a-z0-9-]/g, '-').slice(0, 100);
+          downloadZip(zip.finish(), `${label}-r${revision}.zip`);
+        }
+        runtime.notify((zip
+          ? `ZIP ready: ${completed}/${total} files. Extract it into your destination folder.`
+          : `Downloaded ${completed}/${total} files.`) +
+          (skipped ? ` Skipped ${skipped} tombstoned files.` : ''),
+          {kind: 'download', sticky: true});
+      } catch (cause) {
+        runtime.notify((zip ? `ZIP failed after collecting ${completed}/${total} files: `
+          : `Stopped after ${completed}/${total} downloads: `) +
+          cause.message + (zip ? ' No ZIP was downloaded.'
+            : ' Previously downloaded files remain.'),
+          {kind: 'error', sticky: true});
+      } finally {
+        downloadingTree = false;
+      }
+    }
+
     // ---- the result pane -------------------------------------------------
     let renderToken = 0;
     let renderTimer;
@@ -1090,13 +1303,15 @@
     }
 
     const textual = new Set([
-      'txt', 'csv', 'tab', 'md', 'pem', 'hoon', 'css', 'js', 'html', 'svg',
+      'txt', 'sh', 'csv', 'tab', 'md', 'pem', 'hoon', 'css', 'js', 'html', 'svg',
       'xml', 'udon', 'umd', 'map', 'json', 'bill', 'docket-0', 'kelvin', 'ship'
     ]);
     const images = new Set([
-      'png', 'jpg', 'jpeg', 'gif', 'bmp', 'ico', 'tiff', 'webp'
+      'png', 'heic', 'jpg', 'jpeg', 'gif', 'bmp', 'ico', 'tiff', 'webp'
     ]);
-    const audio = new Set(['mp3', 'wav', 'ogg', 'oga', 'flac', 'aac', 'weba']);
+    const audio = new Set([
+      'mp3', 'm4a', 'wav', 'ogg', 'oga', 'flac', 'aac', 'weba'
+    ]);
     const video = new Set(['mov', 'mp4', 'webm', 'ogv', 'mpeg', 'avi']);
     const fonts = new Set(['otf', 'ttf', 'woff2']);
     const framed = new Set(['hymn', 'urb', 'snip']);
@@ -1516,6 +1731,7 @@
       fallback: (tab, body) => source(body, tab.text)
     };
     renderers.umd = renderers.udon;
+    renderers.sh = renderers.txt;
     for (const mark of images) {
       renderers[mark] = (tab, body) => {
         const image = make('img', {
@@ -1914,11 +2130,13 @@
 
     // ---- upload -------------------------------------------------------------
     const uploadInput = el('hc-upload-input');
+    const uploadFolderInput = el('hc-upload-folder-input');
     let uploadDir = null;
     let uploadFile = null;
     let uploadPlan = null;
     let uploadName = null;
     let uploadPicker = null;
+    let uploadBatch = null;
     let uploadCheck = 0;
     let uploadTimer;
 
@@ -1927,8 +2145,8 @@
       if (parts[0] === '') parts.shift();
       const leaf = parts.pop() || '';
       const dot = leaf.lastIndexOf('.');
-      const mark = dot < 0 ? leaf : leaf.slice(dot + 1);
-      const name = dot < 0 ? parts.pop() : leaf.slice(0, dot);
+      const mark = uploadTerm(dot < 0 ? leaf : leaf.slice(dot + 1));
+      const name = uploadTerm(dot < 0 ? parts.pop() || '' : leaf.slice(0, dot));
       if (!parts.length || !name || !/^[a-z0-9-]+$/.test(name)
         || !/^[a-z][a-z0-9-]*$/.test(mark)
         || parts.some(part => !/^[a-z0-9_~-]+$/.test(part))) {
@@ -1938,11 +2156,16 @@
         filename: `${name}.${mark}`};
     }
 
+    function uploadTerm(name) {
+      return name.replace(/[A-Z]/g, c => c.toLowerCase())
+        .replace(/[^a-z0-9-]/gu, '-');
+    }
+
     function uploadFilename(name) {
       const dot = name.lastIndexOf('.');
-      if (dot < 0) return name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-      return name.slice(0, dot).toLowerCase().replace(/[^a-z0-9-]/g, '-')
-        + '.' + name.slice(dot + 1).toLowerCase();
+      if (dot < 0) return uploadTerm(name);
+      return uploadTerm(name.slice(0, dot))
+        + '.' + uploadTerm(name.slice(dot + 1));
     }
 
     function queueUploadCheck() {
@@ -1951,10 +2174,11 @@
       uploadPlan = null;
       el('hc-upload-confirm').disabled = true;
       uploadPicker.details.replaceChildren();
+      uploadPicker.selectedFile.classList.remove('hc-upload-progress');
       uploadTimer = setTimeout(checkUpload, 250);
     }
 
-    async function startUploadPicker() {
+    async function startUploadPicker(fixedDir = null) {
       closeUpload();
       uploadDir = null;
       uploadName = null;
@@ -1963,27 +2187,44 @@
         spellcheck: 'false', 'aria-describedby': 'hc-upload-path-help'});
       const choose = make('button', {type: 'button',
         id: 'hc-upload-choose', text: 'Choose file…'});
+      const chooseFolder = make('button', {type: 'button',
+        id: 'hc-upload-choose-folder', text: 'Choose folder…'});
+      choose.style.display = chooseFolder.style.display = 'block';
       const selectedFile = make('p', {class: 'hc-note', text: 'No file chosen.'});
       const details = make('div');
       const tree = make('div', {class: 'hc-upload-tree',
         'aria-label': 'Upload destinations'});
-      const picker = {field, selectedFile, details};
+      const picker = {field, selectedFile, details,
+        fixedDir: fixedDir ? [...fixedDir] : null};
+      if (fixedDir) {
+        field.readOnly = true;
+        field.value = '/' + [fixedDir[0], ...fixedDir.slice(2), ''].join('/');
+        tree.hidden = true;
+      }
       uploadPicker = picker;
       el('hc-upload-body').replaceChildren(
         make('label', {for: field.id, text: 'Destination path'}), field,
         make('p', {id: 'hc-upload-path-help', class: 'hc-note', text:
+          fixedDir ? 'This destination is fixed to the selected partial path. ' +
+          'Choose a file or folder to upload here.' :
           'Enter /desk/folder/name.mark or /desk/folder/name/mark. ' +
+          'For a folder upload, enter a partial path such as /desk/folder/. ' +
           'Select a desk, folders, or a file below to fill the path.'}),
-        tree, choose, selectedFile, details);
+        tree, choose, chooseFolder, selectedFile, details);
       el('hc-upload-confirm').disabled = true;
       field.addEventListener('input', queueUploadCheck);
       choose.addEventListener('click', () => {
         uploadInput.value = '';
         uploadInput.click();
       });
+      chooseFolder.addEventListener('click', () => {
+        uploadFolderInput.value = '';
+        uploadFolderInput.click();
+      });
       uploadDialog.open(field);
+      if (fixedDir) return;
       const select = (path, filename) => {
-        let leaf = filename;
+        let leaf = uploadBatch ? '' : filename;
         if (leaf === undefined) {
           try { leaf = uploadDestination(field.value).filename; }
           catch (_) { leaf = uploadFile ? uploadFilename(uploadFile.name) : ''; }
@@ -1991,6 +2232,11 @@
         field.value = '/' + [...path, leaf].join('/');
         queueUploadCheck();
       };
+      const scope = appsUploadRoot === 'data' ? ['data'] : [];
+      await destinationTree(tree, select, scope, () => uploadPicker === picker);
+    }
+
+    async function destinationTree(tree, select, scope = [], active = () => true) {
       const folder = (label, path, fill) => {
         const node = make('details');
         const summary = make('summary', {text: label});
@@ -2036,17 +2282,16 @@
           host.append(make('p', {class: 'hc-note', text: 'Empty folder.'}));
         }
       };
-      const scope = appsUploadRoot === 'data' ? ['data'] : [];
       try {
         const answer = await api('roots');
-        if (uploadPicker !== picker) return;
+        if (!active()) return;
         for (const root of answer.roots) {
           tree.append(folder(`%${root.desk} /${scope.join('/')}`,
             [root.desk, ...scope], async kids => {
               const listing = await api('tree', {
                 desk: root.desk, case: 'now', scope
               });
-              if (uploadPicker === picker) {
+              if (active()) {
                 branches(kids, root.desk, scope, listing.paths);
               }
             }));
@@ -2055,7 +2300,7 @@
           tree.append(make('p', {class: 'hc-note', text: 'No desks available.'}));
         }
       } catch (cause) {
-        if (uploadPicker === picker) {
+        if (active()) {
           tree.append(make('p', {class: 'hc-error', text: cause.message}));
         }
       }
@@ -2063,12 +2308,10 @@
 
     function startUpload(dir, view = currentView()) {
       if (!dir || !isNow(dir)) return;
-      closeUpload();
-      uploadDir = view === 'apps' && appsUploadRoot === 'data'
+      const target = view === 'apps' && appsUploadRoot === 'data'
         && dir[2] !== 'data'
         ? [...dir.slice(0, 2), 'data', ...dir.slice(2)] : [...dir];
-      uploadInput.value = '';
-      uploadInput.click();
+      startUploadPicker(target);
     }
 
     async function trailingNuls(file) {
@@ -2084,28 +2327,118 @@
     uploadInput.addEventListener('change', () => {
       const file = uploadInput.files?.[0];
       if (!file) return;
+      uploadBatch = null;
       uploadFile = file;
       if (uploadPicker) {
         uploadPicker.selectedFile.textContent = `${file.name}, ${file.size} bytes`;
-        if (uploadPicker.field.value.endsWith('/')) {
+        if (!uploadPicker.fixedDir && uploadPicker.field.value.endsWith('/')) {
           uploadPicker.field.value += uploadFilename(file.name);
         }
         queueUploadCheck();
       } else {
-        uploadName = file.name;
+        uploadName = uploadFilename(file.name);
         checkUpload();
       }
     });
+
+    uploadFolderInput.addEventListener('change', () => {
+      if (!uploadPicker || !uploadFolderInput.files?.length) return;
+      uploadFile = null;
+      uploadBatch = Array.from(uploadFolderInput.files);
+      uploadPicker.selectedFile.textContent =
+        `${uploadBatch.length} files selected (including subfolders).`;
+      queueUploadCheck();
+    });
+
+    async function checkFolderUpload(check) {
+      const picker = uploadPicker;
+      try {
+        const parts = picker.fixedDir
+          ? [picker.fixedDir[0], ...picker.fixedDir.slice(2)]
+          : picker.field.value.trim().replace(/^[/]+|[/]+$/g, '').split('/');
+        if (parts.some(part => !/^[a-z0-9_~-]+$/.test(part))) {
+          throw new Error(
+            'Enter a partial folder path such as /base/data/notes/.');
+        }
+        const dir = [parts[0], 'now', ...parts.slice(1)];
+        const seen = new Set();
+        const entries = uploadBatch.map(file => {
+          // The chosen folder is the root; only its contents are appended.
+          const relative = file.webkitRelativePath.split('/').slice(1);
+          if (!relative.length || relative.some(part =>
+            !part || part === '.' || part === '..')) {
+            throw new Error(
+              `Invalid relative path: ${file.webkitRelativePath}`);
+          }
+          const filename = uploadFilename(relative.pop());
+          const folders = relative.map(uploadTerm);
+          const target = [...dir, ...folders];
+          const key = [...target, filename].join('/');
+          if (seen.has(key)) {
+            throw new Error(`Files map to the same destination: ${key}`);
+          }
+          seen.add(key);
+          return {file, dir: target, filename};
+        });
+        picker.details.replaceChildren(make('p', {class: 'hc-upload-progress',
+          text: `Checking ${entries.length} files…`}));
+        for (const entry of entries) {
+          if (check !== uploadCheck) return;
+          const nul = await trailingNuls(entry.file);
+          if (check !== uploadCheck) return;
+          entry.plan = await api('upload-check', {path: entry.dir,
+            filename: entry.filename, size: entry.file.size, nul});
+        }
+        if (check !== uploadCheck) return;
+        const problems = entries.flatMap(entry =>
+          entry.plan.problems.map(problem =>
+            `${entry.file.webkitRelativePath}: ${problem}`));
+        const install = entries.flatMap(entry => entry.plan.install);
+        const existing = entries.filter(entry => entry.plan.exists);
+        uploadDir = dir;
+        uploadPlan = {entries, problems, install, exists: existing.length > 0};
+        picker.field.setAttribute('aria-invalid', 'false');
+        const details = [make('p', {text:
+          `${entries.length} files into /${parts.join('/')}/. ` +
+          'Subfolders are preserved; ' +
+          'each file is committed separately. Empty folders are not uploaded.'})];
+        for (const entry of entries) {
+          details.push(make('p', {class: 'hc-note', text:
+            `${entry.file.webkitRelativePath} → ${entry.plan.clay}`}));
+        }
+        for (const problem of problems) {
+          details.push(make('p', {class: 'hc-warn', text: problem}));
+        }
+        if (existing.length) details.push(make('label', {},
+          make('input', {type: 'checkbox', id: 'hc-upload-overwrite'}),
+          ` Replace ${existing.length} existing files at these paths`));
+        if (install.length) details.push(make('label', {},
+          make('input', {type: 'checkbox', id: 'hc-upload-install'}),
+          ' Install missing marks: ' + [...new Set(install.map(item =>
+            `%${item.mark} from %${item.from}`))].join(', ')));
+        picker.details.replaceChildren(...details);
+        el('hc-upload-confirm').disabled = problems.length > 0;
+      } catch (cause) {
+        if (check !== uploadCheck) return;
+        picker.field.setAttribute('aria-invalid', 'true');
+        picker.details.replaceChildren(make('p', {
+          class: 'hc-error', text: cause.message}));
+      }
+    }
 
     async function checkUpload() {
       const check = ++uploadCheck;
       const file = uploadFile;
       uploadPlan = null;
       el('hc-upload-confirm').disabled = true;
+      if (uploadBatch && uploadPicker) return checkFolderUpload(check);
       let plan;
       try {
         if (uploadPicker) {
-          const target = uploadDestination(uploadPicker.field.value);
+          const target = uploadPicker.fixedDir
+            ? {dir: [...uploadPicker.fixedDir],
+              filename: file ? uploadFilename(file.name) : null}
+            : uploadDestination(uploadPicker.field.value);
           uploadDir = target.dir;
           uploadName = target.filename;
           uploadPicker.field.setAttribute('aria-invalid', 'false');
@@ -2177,22 +2510,71 @@
       el('hc-upload-body').inert = false;
       uploadDialog.close();
       uploadFile = null;
+      uploadBatch = null;
       uploadPlan = null;
     }
 
     el('hc-upload-cancel').addEventListener('click', closeUpload);
     el('hc-upload-confirm').addEventListener('click', async () => {
-      if (!uploadFile || !uploadPlan || uploadPlan.problems.length) return;
+      if ((!uploadFile && !uploadBatch) || !uploadPlan
+        || uploadPlan.problems.length) return;
       const install = el('hc-upload-install')?.checked;
       const overwrite = el('hc-upload-overwrite')?.checked;
       if (uploadPlan.install.length && !install) {
-        runtime.notify('Tick “Install these marks” to upload this file.',
+        runtime.notify('Tick the mark installation checkbox to upload.',
           {kind: 'error'});
         return;
       }
       if (uploadPlan.exists && !overwrite) {
-        runtime.notify('Tick “Replace the existing file” to overwrite it.',
+        runtime.notify('Tick “Replace” to overwrite existing files.',
           {kind: 'error'});
+        return;
+      }
+      if (uploadPlan.entries) {
+        const entries = uploadPlan.entries;
+        const check = uploadCheck;
+        const picker = uploadPicker;
+        picker.selectedFile.classList.add('hc-upload-progress');
+        el('hc-upload-confirm').disabled = true;
+        el('hc-upload-body').inert = true;
+        let completed = 0;
+        try {
+          for (const entry of entries) {
+            if (check !== uploadCheck) break;
+            picker.selectedFile.textContent =
+              `Uploading ${completed + 1}/${entries.length}: ` +
+              entry.file.webkitRelativePath;
+            const form = new FormData();
+            form.append('file', entry.file, entry.filename);
+            if (install) form.append('marks', '1');
+            // Consent applies only to files that existed during the check.
+            if (overwrite && entry.plan.exists) form.append('overwrite', '1');
+            const tail = entry.dir.map(part =>
+              encodeURIComponent(part)).join('/');
+            await reply(await fetch(`${base}/upload/${tail}`, {
+              method: 'POST', credentials: 'same-origin', body: form
+            }));
+            completed += 1;
+          }
+          if (check === uploadCheck) closeUpload();
+          runtime.notify(`Uploaded ${completed}/${entries.length} files.`,
+            {kind: 'upload'});
+        } catch (cause) {
+          if (check === uploadCheck) {
+            uploadPlan = null;
+            el('hc-upload-body').inert = false;
+            picker.details.replaceChildren(make('p', {class: 'hc-error', text:
+              `Stopped after ${completed}/${entries.length} confirmed uploads. ` +
+              `${entries[completed].file.webkitRelativePath}: ${cause.message}. ` +
+              'Earlier uploads remain. Check the destination before retrying.'}));
+          }
+          runtime.notify(
+            `Upload stopped: ${completed}/${entries.length} confirmed. ` +
+            cause.message,
+            {kind: 'error', sticky: true});
+        } finally {
+          refreshDesk(entries[0].dir[0]);
+        }
         return;
       }
       const form = new FormData();
@@ -2223,10 +2605,106 @@
       if (check !== uploadCheck) return;
       closeUpload();
       runtime.notify(
-        `Uploaded ${clayText(answer.path)} to %${answer.path[0]}.`);
+        `Uploaded ${clayText(answer.path)} to %${answer.path[0]}.`,
+        {kind: 'upload'});
       refreshDesk(answer.path[0]);
       openFile(answer.path);
     });
+
+    // ---- recursive deletion and historical tombstoning ----------------
+    let bulkMutation = false;
+    async function mutateTree(path, op) {
+      if (bulkMutation || (op === 'delete') !== isNow(path)) return;
+      bulkMutation = true;
+      const [desk, revision, ...scope] = path;
+      const deleting = op === 'delete';
+      const action = deleting ? 'Delete' : 'Tombstone';
+      let attempted = false;
+      try {
+        runtime.notify(`Listing files to ${op}…`, {sticky: true});
+        // Freeze the names before confirmation; newly added paths are excluded.
+        const listing = await api('tree', {desk, case: revision, scope});
+        const seen = new Set();
+        const tombs = new Set(listing.tombs.map(file => JSON.stringify(file)));
+        const files = [];
+        let skipped = 0;
+        for (const file of listing.paths) {
+          if (!Array.isArray(file) || file.length < scope.length + 2
+              || !scope.every((part, i) => part === file[i])
+              || !file.every(part => typeof part === 'string'
+                && /^[a-z0-9_~-]+$/.test(part))) {
+            throw new Error('Invalid file path in the selected tree; nothing was changed.');
+          }
+          const key = JSON.stringify(file);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          if (!deleting && tombs.has(key)) { skipped += 1; continue; }
+          files.push([desk, revision, ...file]);
+        }
+        if (!files.length) {
+          runtime.notify(`No files to ${op} under /${[desk, ...scope].join('/')}.` +
+            (skipped ? ` ${skipped} already tombstoned.` : ''), {sticky: true});
+          return;
+        }
+        const message = `${action} ${files.length} files under ` +
+          `/${[desk, ...scope].join('/')}/ at ${revision}, including all subpaths? ` +
+          'This operation may be partially successful. Files that cannot be ' +
+          `${deleting ? 'deleted' : 'tombstoned'} will be left as is; ` +
+          'the remaining files will still be attempted. ' +
+          (deleting
+            ? 'All eligible files are deleted in one new revision. Earlier revisions remain. ' +
+              'If the commit fails, none of the eligible files are deleted. '
+            : 'This permanently discards historical content and cannot be undone. ' +
+              'Identical content at other historical paths/revisions is also affected. ' +
+              'Content still used by any current file is protected. ') +
+          (skipped ? `${skipped} already-tombstoned files will be skipped. ` : '') +
+          'Continue?';
+        if (!await runtime.confirm('tree-mutation', {message})) {
+          runtime.notify(`${action} cancelled; no files changed.`);
+          return;
+        }
+        let succeeded = 0;
+        const failures = [];
+        if (deleting) {
+          runtime.notify(`Deleting ${files.length} files in one revision…`, {sticky: true});
+          attempted = true;
+          const result = await api('delete-tree', {path, paths: files}, `${base}/delete-tree`);
+          runtime.documents.deleted(store, result.deleted);
+          succeeded = result.deleted.length;
+          failures.push(...result.skipped.map(item => `${clayText(item.path)}: ${item.message}`));
+        } else for (const [index, file] of files.entries()) {
+          runtime.notify(`${deleting ? 'Deleting' : 'Tombstoning'} ` +
+            `${index + 1}/${files.length}: ${clayText(file)}`, {sticky: true});
+          attempted = true;
+          try {
+            await api('tomb', {path: file}, `${base}/tomb`);
+            succeeded += 1;
+          } catch (cause) {
+            // A prior successful tomb may also remove this file's shared blob.
+            if (!deleting && cause.message === 'that version is already tombstoned') {
+              skipped += 1;
+            } else {
+              failures.push(`${clayText(file)}: ${cause.message}`);
+            }
+          }
+        }
+        runtime.notify(`${action} finished: ${succeeded} succeeded, ` +
+          `${failures.length} failed or unconfirmed, ${skipped} already tombstoned.` +
+          (failures.length ? ' Successful changes remain. Check the listed files before retrying.' : ''),
+          {kind: failures.length ? 'error' : 'info', sticky: true, details: failures});
+      } catch (cause) {
+        runtime.notify(cause.message + (deleting && attempted
+          ? ' Delete outcome is unconfirmed; refresh the tree before retrying.' : ''),
+          {kind: 'error', sticky: true});
+      } finally {
+        bulkMutation = false;
+        if (attempted) {
+          tombstones.clear();
+          loadRoots();
+          renderResult();
+        }
+      }
+    }
 
     // ---- deleting a version from history ------------------------------
     let tombTarget = null;
@@ -2235,7 +2713,7 @@
       if (!path || isNow(path)) return;
       tombTarget = path;
       el('hc-tomb-message').textContent =
-        `Delete ${clayText(path)} as of revision ${path[1]} of ` +
+        `Tombstone ${clayText(path)} as of revision ${path[1]} of ` +
         `%${path[0]}?  Clay discards the stored content of this version ` +
         'wherever it is kept, so every revision and path holding the ' +
         'same content shows it as tombstoned.  This cannot be undone.  ' +
@@ -2258,8 +2736,9 @@
         runtime.notify(cause.message, {kind: 'error', sticky: true});
         return;
       }
-      runtime.notify(`Deleted ${clayText(path)} at revision ${path[1]}.`);
-      refreshDesk(path[0]);
+      runtime.notify(`Tombstoned ${clayText(path)} at revision ${path[1]}.`);
+      tombstones.clear();
+      loadRoots();
     }
 
     // ---- choosing a revision -----------------------------------------
@@ -2334,16 +2813,18 @@
       },
       contextMenu: {
         items: [
-          {id: 'download', label: 'Download',
-            title: 'Save this file to this computer'},
+          {id: 'download', label: 'Download…',
+            title: 'Save this file or folder tree to this computer'},
           {id: 'attributes', label: 'Attributes…',
             title: 'File or path attributes'},
           {id: 'permissions', label: 'Permissions…',
             title: 'Read and write rules and crews'},
           {id: 'upload', label: 'Upload…',
-            title: 'Upload a file into this directory'},
-          {id: 'tomb', label: 'Delete', danger: true,
-            title: 'Delete this version of the file from history'},
+            title: 'Upload a file or folder into this directory'},
+          {id: 'delete-tree', label: 'Delete', danger: true,
+            title: 'Delete current files under this partial path'},
+          {id: 'tomb', label: 'Tombstone', danger: true,
+            title: 'Discard this historical version’s stored content'},
           {id: 'now', label: 'Now',
             title: 'Browse this desk at its current revision'},
           {id: 'revision', label: 'Revision…',
@@ -2356,22 +2837,32 @@
           const many = (desk?.head || 1) > 1;
           return {
             open: {hidden: !file, disabled: target.tomb},
-            download: {hidden: !file, disabled: target.tomb},
+            download: {disabled: file && target.tomb},
             upload: {hidden: file || !current},
-            //  history is the only place a file is deleted from here
-            delete: {hidden: true},
-            tomb: {hidden: !file, disabled: current || target.tomb},
+            delete: {hidden: !file || !current, disabled: target.tomb || bulkMutation},
+            'delete-tree': {hidden: file || !current, disabled: bulkMutation},
+            tomb: {
+              hidden: current,
+              disabled: (file && target.tomb) || bulkMutation
+            },
             now: {disabled: !many || desk.current() >= desk.head},
             revision: {disabled: !many}
           };
         },
         select: (id, target) => {
-          if (id === 'download') download(target.path);
+          if (id === 'download') {
+            if (target.entry === 'file') download(target.path);
+            else downloadTree(target.path);
+          }
           else if (id === 'attributes' || id === 'permissions') {
             openAttributes(target.path, target.entry, id);
           }
           else if (id === 'upload') startUpload(target.path, target.view);
-          else if (id === 'tomb') openTomb(target.path);
+          else if (id === 'delete-tree') mutateTree(target.path, 'delete');
+          else if (id === 'tomb') {
+            if (target.entry === 'file') openTomb(target.path);
+            else mutateTree(target.path, 'tomb');
+          }
           else if (id === 'now') {
             const desk = revisions[target.view]?.get(target.path[0]);
             desk?.pick(desk.head);
@@ -2388,6 +2879,20 @@
       documents: {
         clay: {
           label: (tab) => tab.path ? fileTabLabel(tab.path) : tab.draft,
+          saveDialog: () => ({
+            value: '',
+            browse: (select) => {
+              const tree = make('div', {class: 'hc-upload-tree',
+                'aria-label': 'Save destinations'});
+              tree.append(make('p', {class: 'hc-note', text:
+                'Select a desk and folders to build a path, then type any ' +
+                'new folders and name.mark. Saves use the current revision.'}));
+              destinationTree(tree, (path, filename = '') => {
+                select('/' + [path[0], 'now', ...path.slice(1), filename].join('/'));
+              }, [], () => tree.isConnected);
+              return tree;
+            }
+          }),
           beforeSave: async (tab, {path}) => {
             if (isNow(path)) return;
             const current = [path[0], 'now', ...path.slice(2)];
@@ -2456,11 +2961,13 @@
       event.preventDefault();
       acceptRevision();
     });
+    el('clay-new').before(el('hc-download-button'));
+    el('hc-download-button').classList.add('store-action');
     el('hc-download-button').addEventListener('click', () => {
       const path = runtime.documents.active(store)?.path;
       if (path) download(path);
     });
-    el('hc-upload-button').addEventListener('click', startUploadPicker);
+    el('hc-upload-button').addEventListener('click', () => startUploadPicker());
     runtime.start((saved) => {
       trees = validTrees(saved?.heathcliffTrees);
       appsUploadRoot = saved?.['preferences.appsUploadRoot'] === 'root'
