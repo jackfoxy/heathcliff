@@ -29,7 +29,7 @@
           max-source=1.048.576
       ==
       slots
-      shortcuts
+      ~[['Ctrl-S' 'save:clay' %always]]
       :~  [%ready 'Ready']
           [%loading 'Loading']
           [%empty 'Nothing selected']
@@ -96,11 +96,6 @@
       ['preferences.layout' %urui %scalar ~]
       ['preferences.keybindings' %urui %scalar ~]
       ['preferences.appsUploadRoot' %app %scalar ~]
-  ==
-::
-++  shortcuts
-  ^-  (list shortcut:urui)
-  :~  ['Ctrl-S' 'save:clay' %always]
   ==
 ::
 ++  ace-spec
@@ -200,13 +195,13 @@
                   reorder=&
               ==
           ==
-          (pinned %body [%panel 'editor-body' `clay-host ~])
+          %+  pinned  %body
+          :*  %panel  'editor-body'
+              `['clay-editor' 'File source editor' 'ace/mode/text']
+              ~
+          ==
       ==
   ==
-::
-++  clay-host
-  ^-  editor:urui
-  ['clay-editor' 'File source editor' 'ace/mode/text']
 ::
 ++  result-pane
   ::  Read-only: a preview or decoded view of the active file.
@@ -546,7 +541,9 @@
   }
   .hc-attributes { overflow: auto; padding: 0.75rem; }
   .hc-attributes h2 { font-size: 1rem; overflow-wrap: anywhere; }
-  .hc-attributes .hc-attributes-body dl { grid-template-columns: minmax(0, 1fr); }
+  .hc-attributes .hc-attributes-body dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .hc-attributes .hc-attributes-body dd { margin-bottom: 0.4rem; }
   .hc-attributes input, .hc-attributes textarea, .hc-attributes select {
     min-width: 0; max-width: 100%; box-sizing: border-box;
@@ -1096,16 +1093,22 @@
           const name = new TextEncoder().encode(path);
           const size = blob.size;
           if (central.length >= maxFiles || name.length > 65535) {
-            throw new Error('ZIP entry limit exceeded; download smaller subtrees.');
+            throw new Error(
+              'ZIP entry limit exceeded; download smaller subtrees.');
           }
-          if (offset + centralSize + size + 76 + 2 * name.length + 22 > maxBytes) {
-            throw new Error('ZIP size limit exceeded (256 MiB); download smaller subtrees.');
+          if (offset + centralSize + size + 76 + 2 * name.length + 22
+              > maxBytes) {
+            throw new Error('ZIP size limit exceeded (256 MiB); ' +
+              'download smaller subtrees.');
           }
           let crc = 0xffffffff;
-          // Yield between chunks so progress remains responsive for large files.
+          // Yield between chunks to keep large-file progress responsive.
           for (let at = 0; at < size; at += 1024 * 1024) {
-            const bytes = new Uint8Array(await blob.slice(at, at + 1024 * 1024).arrayBuffer());
-            for (const byte of bytes) crc = (crc >>> 8) ^ crcTable[(crc ^ byte) & 255];
+            const bytes = new Uint8Array(
+              await blob.slice(at, at + 1024 * 1024).arrayBuffer());
+            for (const byte of bytes) {
+              crc = (crc >>> 8) ^ crcTable[(crc ^ byte) & 255];
+            }
           }
           crc = (crc ^ 0xffffffff) >>> 0;
           const local = new Uint8Array(30 + name.length);
@@ -1139,7 +1142,8 @@
           view.setUint16(10, central.length, true);
           view.setUint32(12, centralSize, true);
           view.setUint32(16, offset, true);
-          return new Blob([...parts, ...central, end], {type: 'application/zip'});
+          return new Blob([...parts, ...central, end],
+            {type: 'application/zip'});
         }
       };
     }
@@ -1197,7 +1201,8 @@
         const skipped = listing.paths.length - files.length;
         const safeName = name => typeof name === 'string' && name.length > 0
           && name !== '.' && name !== '..'
-          && Array.from(name).every(char => char >= ' ' && char !== '/' && char !== ':'
+          && Array.from(name).every(char =>
+            char >= ' ' && char !== '/' && char !== ':'
             && char.charCodeAt(0) !== 92 && char.charCodeAt(0) !== 127);
         for (const file of files) {
           if (!Array.isArray(file) || file.length < scope.length + 2
@@ -1209,11 +1214,13 @@
         total = files.length;
         const written = new Set();
         for (const file of files) {
-          runtime.notify(`${zip ? 'Preparing ZIP' : 'Downloading'} ${completed + 1}/${total} files…`,
+          runtime.notify(`${zip ? 'Preparing ZIP' : 'Downloading'} ` +
+            `${completed + 1}/${total} files…`,
             {kind: 'download', sticky: true});
           const response = await fetch(rawUrl([desk, revision, ...file], true));
           if (!response.ok) {
-            throw new Error(`Cannot download /${file.join('/')} (${response.status}).`);
+            throw new Error(
+              `Cannot download /${file.join('/')} (${response.status}).`);
           }
           // Use the mark's external filename, including noun -> jam and mime.
           const name = response.headers.get('content-disposition')
@@ -1223,7 +1230,8 @@
           const relative = [...folders, name].join('/');
           const key = relative.toLowerCase();
           if (written.has(key)) {
-            throw new Error(`Files map to the same local destination: ${relative}`);
+            throw new Error(
+              `Files map to the same local destination: ${relative}`);
           }
           const bytes = await response.blob();
           if (zip) {
@@ -1234,7 +1242,8 @@
           }
           let directory = destination;
           for (const folder of folders) {
-            directory = await directory.getDirectoryHandle(folder, {create: true});
+            directory = await directory.getDirectoryHandle(folder,
+              {create: true});
           }
           let handle;
           try { handle = await directory.getFileHandle(name); }
@@ -1247,7 +1256,9 @@
               {kind: 'download', sticky: true});
             return;
           }
-          if (!handle) handle = await directory.getFileHandle(name, {create: true});
+          if (!handle) {
+            handle = await directory.getFileHandle(name, {create: true});
+          }
           const writer = await handle.createWritable();
           try {
             await writer.write(bytes);
@@ -1260,16 +1271,19 @@
           completed += 1;
         }
         if (zip) {
-          const label = (scope.at(-1) || desk).replace(/[^a-z0-9-]/g, '-').slice(0, 100);
+          const label = (scope.at(-1) || desk)
+            .replace(/[^a-z0-9-]/g, '-').slice(0, 100);
           downloadZip(zip.finish(), `${label}-r${revision}.zip`);
         }
         runtime.notify((zip
-          ? `ZIP ready: ${completed}/${total} files. Extract it into your destination folder.`
+          ? `ZIP ready: ${completed}/${total} files. ` +
+            'Extract it into your destination folder.'
           : `Downloaded ${completed}/${total} files.`) +
           (skipped ? ` Skipped ${skipped} tombstoned files.` : ''),
           {kind: 'download', sticky: true});
       } catch (cause) {
-        runtime.notify((zip ? `ZIP failed after collecting ${completed}/${total} files: `
+        runtime.notify((zip
+          ? `ZIP failed after collecting ${completed}/${total} files: `
           : `Stopped after ${completed}/${total} downloads: `) +
           cause.message + (zip ? ' No ZIP was downloaded.'
             : ' Previously downloaded files remain.'),
@@ -1303,7 +1317,8 @@
     }
 
     const textual = new Set([
-      'txt', 'sh', 'csv', 'tab', 'md', 'pem', 'hoon', 'css', 'js', 'html', 'svg',
+      'txt', 'sh', 'csv', 'tab', 'md', 'pem', 'hoon', 'css', 'js',
+      'html', 'svg',
       'xml', 'udon', 'umd', 'map', 'json', 'bill', 'docket-0', 'kelvin', 'ship'
     ]);
     const images = new Set([
@@ -1824,14 +1839,18 @@
       if (!answer.file || answer.file.tombstoned) return;
       const mark = answer.target.mark;
       const type = answer.file.type || '';
-      const image = images.has(mark) || mark === 'svg' || type.startsWith('image/');
+      const image = images.has(mark) || mark === 'svg'
+        || type.startsWith('image/');
       if (!image && !audio.has(mark) && !video.has(mark)
         && mark !== 'mid' && mark !== 'mime') return;
       const section = make('section');
       section.append(make('h3', {
-        text: image ? 'Image attributes (read-only)' : 'Codec attributes (read-only)'
+        text: image ? 'Image attributes (read-only)'
+          : 'Codec attributes (read-only)'
       }));
-      const status = make('p', {class: 'hc-note', text: 'Reading file metadata…'});
+      const status = make('p', {
+        class: 'hc-note', text: 'Reading file metadata…'
+      });
       section.append(status);
       body.append(section);
       let worker;
@@ -1849,7 +1868,8 @@
       };
       target.stop = stop;
       const finish = (groups, error) => {
-        if (stopped || attributeTargets.get(target.ref.id) !== target || !section.isConnected) return;
+        if (stopped || attributeTargets.get(target.ref.id) !== target
+            || !section.isConnected) return;
         stop();
         status.remove();
         for (const group of groups) {
@@ -1860,7 +1880,8 @@
           noted(section, 'No readable metadata was found for this format.');
         }
       };
-      timer = setTimeout(() => finish([], 'Metadata inspection timed out.'), 20000);
+      timer = setTimeout(() =>
+        finish([], 'Metadata inspection timed out.'), 20000);
       // SVG is decoded as an image, never inserted as active markup.
       if (mark === 'svg' || type.split(';')[0] === 'image/svg+xml') {
         picture = new Image();
@@ -1875,7 +1896,8 @@
       try {
         worker = new Worker(`${base}/media-worker.js`, {type: 'module'});
         worker.onmessage = ({data}) => finish(data.groups || [], data.error);
-        worker.onerror = () => finish([], 'Unable to read this file’s metadata.');
+        worker.onerror = () =>
+          finish([], 'Unable to read this file’s metadata.');
         worker.postMessage({url: rawUrl(target.path)});
       } catch (cause) {
         finish([], 'Metadata inspection is unavailable in this browser.');
@@ -2082,7 +2104,8 @@
           : 'Clay keeps current rules only: these are as of now, not of this ' +
             'revision, and cannot be changed from a historical revision.');
         parts.push(header,
-          ruleSection(target, 'Read', perms.read, 'read', current, perms.enforced.read),
+          ruleSection(target, 'Read', perms.read, 'read',
+            current, perms.enforced.read),
           ruleSection(target, 'Write', perms.write, 'write', current,
             perms.enforced.write),
           explicitSection(perms),
@@ -2190,7 +2213,9 @@
       const chooseFolder = make('button', {type: 'button',
         id: 'hc-upload-choose-folder', text: 'Choose folder…'});
       choose.style.display = chooseFolder.style.display = 'block';
-      const selectedFile = make('p', {class: 'hc-note', text: 'No file chosen.'});
+      const selectedFile = make('p', {
+        class: 'hc-note', text: 'No file chosen.'
+      });
       const details = make('div');
       const tree = make('div', {class: 'hc-upload-tree',
         'aria-label': 'Upload destinations'});
@@ -2205,7 +2230,8 @@
       el('hc-upload-body').replaceChildren(
         make('label', {for: field.id, text: 'Destination path'}), field,
         make('p', {id: 'hc-upload-path-help', class: 'hc-note', text:
-          fixedDir ? 'This destination is fixed to the selected partial path. ' +
+          fixedDir ?
+          'This destination is fixed to the selected partial path. ' +
           'Choose a file or folder to upload here.' :
           'Enter /desk/folder/name.mark or /desk/folder/name/mark. ' +
           'For a folder upload, enter a partial path such as /desk/folder/. ' +
@@ -2227,7 +2253,9 @@
         let leaf = uploadBatch ? '' : filename;
         if (leaf === undefined) {
           try { leaf = uploadDestination(field.value).filename; }
-          catch (_) { leaf = uploadFile ? uploadFilename(uploadFile.name) : ''; }
+          catch (_) {
+            leaf = uploadFile ? uploadFilename(uploadFile.name) : '';
+          }
         }
         field.value = '/' + [...path, leaf].join('/');
         queueUploadCheck();
@@ -2236,7 +2264,9 @@
       await destinationTree(tree, select, scope, () => uploadPicker === picker);
     }
 
-    async function destinationTree(tree, select, scope = [], active = () => true) {
+    async function destinationTree(
+      tree, select, scope = [], active = () => true
+    ) {
       const folder = (label, path, fill) => {
         const node = make('details');
         const summary = make('summary', {text: label});
@@ -2249,7 +2279,9 @@
           try { await fill(kids); }
           catch (cause) {
             built = false;
-            kids.replaceChildren(make('p', {class: 'hc-error', text: cause.message}));
+            kids.replaceChildren(make('p', {
+              class: 'hc-error', text: cause.message
+            }));
           }
         });
         node.append(summary, kids);
@@ -2297,7 +2329,9 @@
             }));
         }
         if (!answer.roots.length) {
-          tree.append(make('p', {class: 'hc-note', text: 'No desks available.'}));
+          tree.append(make('p', {
+            class: 'hc-note', text: 'No desks available.'
+          }));
         }
       } catch (cause) {
         if (active()) {
@@ -2330,7 +2364,8 @@
       uploadBatch = null;
       uploadFile = file;
       if (uploadPicker) {
-        uploadPicker.selectedFile.textContent = `${file.name}, ${file.size} bytes`;
+        uploadPicker.selectedFile.textContent =
+          `${file.name}, ${file.size} bytes`;
         if (!uploadPicker.fixedDir && uploadPicker.field.value.endsWith('/')) {
           uploadPicker.field.value += uploadFilename(file.name);
         }
@@ -2401,7 +2436,8 @@
         const details = [make('p', {text:
           `${entries.length} files into /${parts.join('/')}/. ` +
           'Subfolders are preserved; ' +
-          'each file is committed separately. Empty folders are not uploaded.'})];
+          'each file is committed separately. Empty folders are not uploaded.'
+        })];
         for (const entry of entries) {
           details.push(make('p', {class: 'hc-note', text:
             `${entry.file.webkitRelativePath} → ${entry.plan.clay}`}));
@@ -2564,9 +2600,12 @@
             uploadPlan = null;
             el('hc-upload-body').inert = false;
             picker.details.replaceChildren(make('p', {class: 'hc-error', text:
-              `Stopped after ${completed}/${entries.length} confirmed uploads. ` +
-              `${entries[completed].file.webkitRelativePath}: ${cause.message}. ` +
-              'Earlier uploads remain. Check the destination before retrying.'}));
+              `Stopped after ${completed}/${entries.length} ` +
+              'confirmed uploads. ' +
+              `${entries[completed].file.webkitRelativePath}: ` +
+              `${cause.message}. ` +
+              'Earlier uploads remain. Check the destination before retrying.'
+            }));
           }
           runtime.notify(
             `Upload stopped: ${completed}/${entries.length} confirmed. ` +
@@ -2633,7 +2672,8 @@
               || !scope.every((part, i) => part === file[i])
               || !file.every(part => typeof part === 'string'
                 && /^[a-z0-9_~-]+$/.test(part))) {
-            throw new Error('Invalid file path in the selected tree; nothing was changed.');
+            throw new Error('Invalid file path in the selected tree; ' +
+              'nothing was changed.');
           }
           const key = JSON.stringify(file);
           if (seen.has(key)) continue;
@@ -2642,22 +2682,28 @@
           files.push([desk, revision, ...file]);
         }
         if (!files.length) {
-          runtime.notify(`No files to ${op} under /${[desk, ...scope].join('/')}.` +
+          runtime.notify(
+            `No files to ${op} under /${[desk, ...scope].join('/')}.` +
             (skipped ? ` ${skipped} already tombstoned.` : ''), {sticky: true});
           return;
         }
         const message = `${action} ${files.length} files under ` +
-          `/${[desk, ...scope].join('/')}/ at ${revision}, including all subpaths? ` +
+          `/${[desk, ...scope].join('/')}/ at ${revision}, ` +
+          'including all subpaths? ' +
           'This operation may be partially successful. Files that cannot be ' +
           `${deleting ? 'deleted' : 'tombstoned'} will be left as is; ` +
           'the remaining files will still be attempted. ' +
           (deleting
-            ? 'All eligible files are deleted in one new revision. Earlier revisions remain. ' +
+            ? 'All eligible files are deleted in one new revision. ' +
+              'Earlier revisions remain. ' +
               'If the commit fails, none of the eligible files are deleted. '
-            : 'This permanently discards historical content and cannot be undone. ' +
-              'Identical content at other historical paths/revisions is also affected. ' +
+            : 'This permanently discards historical content ' +
+              'and cannot be undone. ' +
+              'Identical content at other historical paths/revisions ' +
+              'is also affected. ' +
               'Content still used by any current file is protected. ') +
-          (skipped ? `${skipped} already-tombstoned files will be skipped. ` : '') +
+          (skipped
+            ? `${skipped} already-tombstoned files will be skipped. ` : '') +
           'Continue?';
         if (!await runtime.confirm('tree-mutation', {message})) {
           runtime.notify(`${action} cancelled; no files changed.`);
@@ -2666,14 +2712,17 @@
         let succeeded = 0;
         const failures = [];
         if (deleting) {
-          runtime.notify(`Deleting ${files.length} files in one revision…`, {sticky: true});
+          runtime.notify(`Deleting ${files.length} files in one revision…`,
+            {sticky: true});
           attempted = true;
-          const result = await api('delete-tree', {path, paths: files}, `${base}/delete-tree`);
+          const result = await api('delete-tree',
+            {path, paths: files}, `${base}/delete-tree`);
           runtime.documents.deleted(store, result.deleted);
           succeeded = result.deleted.length;
-          failures.push(...result.skipped.map(item => `${clayText(item.path)}: ${item.message}`));
+          failures.push(...result.skipped.map(item =>
+            `${clayText(item.path)}: ${item.message}`));
         } else for (const [index, file] of files.entries()) {
-          runtime.notify(`${deleting ? 'Deleting' : 'Tombstoning'} ` +
+          runtime.notify('Tombstoning ' +
             `${index + 1}/${files.length}: ${clayText(file)}`, {sticky: true});
           attempted = true;
           try {
@@ -2681,7 +2730,7 @@
             succeeded += 1;
           } catch (cause) {
             // A prior successful tomb may also remove this file's shared blob.
-            if (!deleting && cause.message === 'that version is already tombstoned') {
+            if (cause.message === 'that version is already tombstoned') {
               skipped += 1;
             } else {
               failures.push(`${clayText(file)}: ${cause.message}`);
@@ -2689,12 +2738,16 @@
           }
         }
         runtime.notify(`${action} finished: ${succeeded} succeeded, ` +
-          `${failures.length} failed or unconfirmed, ${skipped} already tombstoned.` +
-          (failures.length ? ' Successful changes remain. Check the listed files before retrying.' : ''),
-          {kind: failures.length ? 'error' : 'info', sticky: true, details: failures});
+          `${failures.length} failed or unconfirmed, ` +
+          `${skipped} already tombstoned.` +
+          (failures.length ? ' Successful changes remain. ' +
+            'Check the listed files before retrying.' : ''),
+          {kind: failures.length ? 'error' : 'info',
+            sticky: true, details: failures});
       } catch (cause) {
         runtime.notify(cause.message + (deleting && attempted
-          ? ' Delete outcome is unconfirmed; refresh the tree before retrying.' : ''),
+          ? ' Delete outcome is unconfirmed; ' +
+            'refresh the tree before retrying.' : ''),
           {kind: 'error', sticky: true});
       } finally {
         bulkMutation = false;
@@ -2791,7 +2844,8 @@
       persist: false,
       create: ({path, entry}) => ({
         label: entry === 'file' ? fileTabLabel(path)
-          : `${path.slice(2).join('/') || '%' + path[0]}${isNow(path) ? '' : ' rev ' + path[1]}`,
+          : `${path.slice(2).join('/') || '%' + path[0]}` +
+            `${isNow(path) ? '' : ' rev ' + path[1]}`,
         data: {path: [...path], entry}
       }),
       render: mountAttributes,
@@ -2839,7 +2893,8 @@
             open: {hidden: !file, disabled: target.tomb},
             download: {disabled: file && target.tomb},
             upload: {hidden: file || !current},
-            delete: {hidden: !file || !current, disabled: target.tomb || bulkMutation},
+            delete: {hidden: !file || !current,
+              disabled: target.tomb || bulkMutation},
             'delete-tree': {hidden: file || !current, disabled: bulkMutation},
             tomb: {
               hidden: current,
@@ -2888,7 +2943,8 @@
                 'Select a desk and folders to build a path, then type any ' +
                 'new folders and name.mark. Saves use the current revision.'}));
               destinationTree(tree, (path, filename = '') => {
-                select('/' + [path[0], 'now', ...path.slice(1), filename].join('/'));
+                select('/' +
+                  [path[0], 'now', ...path.slice(1), filename].join('/'));
               }, [], () => tree.isConnected);
               return tree;
             }

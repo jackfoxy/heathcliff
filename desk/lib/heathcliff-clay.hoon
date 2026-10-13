@@ -52,16 +52,12 @@
   |=  =mark
   ^-  (unit mite)
   ?+  mark  ~
-    %txt    `/text/plain
-    %sh     `/text/plain
+    ?(%txt %sh)  `/text/plain
     %hoon   `/text/x-hoon
     %css    `/text/css
     %js     `/text/javascript
     %json   `/application/json
-    %html   `/text/html
-    %hymn   `/text/html
-    %urb    `/text/html
-    %snip   `/text/html
+    ?(%html %hymn %urb %snip)  `/text/html
     %xml    `/text/xml
     %csv    `/text/csv
     %tab    `/text/tab-separated-values
@@ -70,8 +66,7 @@
     %svg    [~ `mite`~['image' 'svg+xml']]
     %png    `/image/png
     %heic   `/image/heic
-    %jpg    `/image/jpeg
-    %jpeg   `/image/jpeg
+    ?(%jpg %jpeg)  `/image/jpeg
     %gif    `/image/gif
     %bmp    `/image/bmp
     %ico    `/image/x-icon
@@ -79,8 +74,7 @@
     %webp   `/image/webp
     %mp3    `/audio/mpeg
     %wav    `/audio/wav
-    %ogg    `/audio/ogg
-    %oga    `/audio/ogg
+    ?(%ogg %oga)  `/audio/ogg
     %flac   `/audio/flac
     %aac    `/audio/aac
     %m4a    `/audio/mp4
@@ -100,8 +94,7 @@
     %rar    [~ `mite`~['application' 'vnd.rar']]
     %pem    `/application/x-pem-file
     %wasm   `/application/wasm
-    %jam    `/application/x-urb-jam
-    %noun   `/application/x-urb-jam
+    ?(%jam %noun)  `/application/x-urb-jam
   ==
 ::
 ++  casts
@@ -292,10 +285,10 @@
   |=  =mark
   ^-  (list ^mark)
   ?+  mark  ~[%mime mark]
-    ?(%mime %noun %txt)                                ~[mark]
-    ?(%bill %docket-0 %hymn %kelvin %ship %snip %urb)  ~[%noun mark]
-    %txt-diff                                          ~[%noun mark]
-    ?(%hoon %udon %umd %sh)                            ~[%txt mark]
+    ?(%mime %noun %txt)  ~[mark]
+    ?(%bill %docket-0 %hymn %kelvin %ship %snip %urb %txt-diff)
+      ~[%noun mark]
+    ?(%hoon %udon %umd %sh)  ~[%txt mark]
   ==
 ::
 ++  missing
@@ -451,16 +444,12 @@
   %+  turn  dif
   |=  hun=(unce:clay cord)
   ^-  wain
-  ?-  -.hun
-      %&
+  ?:  ?=(%& -.hun)
     =/  plural=tape  ?:(=(1 p.hun) "" "s")
     [(crip "= {(a-co:co p.hun)} unchanged line{plural}") ~]
-  ::
-      %|
-    %+  weld
-      (turn p.hun |=(l=cord (cat 3 '- ' l)))
-    (turn q.hun |=(l=cord (cat 3 '+ ' l)))
-  ==
+  %+  weld
+    (turn p.hun |=(l=cord (cat 3 '- ' l)))
+  (turn q.hun |=(l=cord (cat 3 '+ ' l)))
 ::
 ++  dump
   ::  A hex dump of the first +dump-max bytes of `len` bytes of `dat`.

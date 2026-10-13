@@ -4,7 +4,7 @@ Heathcliff shows the Clay filesystem of your ship: every desk, every file,
 and every revision. You can edit text files, preview the rest, download
 and upload files, and manage read and write permissions.
 
-Open it at `/heathcliff` on your ship. You must be logged in.
+Open `heathcliff` on your ship. You must be logged in.
 
 **Help** lists Keyboard Shortcuts, this Users Guide, Reference, and
 About Heathcliff and Ace editor from the desk's `doc.toc`. Select a topic to open it in a

@@ -1,5 +1,6 @@
 |%
-++  static                                              :: freeze .mdh hoon subset
+::  freeze .mdh hoon subset
+++  static
   |=  gen=hoon  ^-  [inf=(map term dime) elm=manx]
   ?+    -.gen
       =/  gen  ~(open ap gen)
@@ -38,7 +39,8 @@
   ==
 ::
 ::
-++  frontmatter                                         :: parse ~[[%foo 1] [%bar ~s2]]
+::  parse ~[[%foo 1] [%bar ~s2]]
+++  frontmatter
   |=  gen=hoon  ^-  (list [term dime])
   ?:  ?=([%bust %null] gen)  ~
   ?:  ?=(%dbug -.gen)  $(gen q.gen)

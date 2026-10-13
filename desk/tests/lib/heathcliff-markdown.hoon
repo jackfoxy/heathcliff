@@ -23,6 +23,25 @@
   %+  turn  parts
   |=(part=tape (expect !>(?=(^ (find part (trip u.got))))))
 ::
+++  test-wrapped-markdown-forms
+  ::  Exercise parser and renderer expressions converted to tall form.
+  =/  cases=(list [source=@t part=@t])
+    :~  ['[a](https://example.com "title")' 'title="title"']
+        ['[a](https://example.com \'title\')' 'title="title"']
+        ['[a](https://example.com (title))' 'title="title"']
+        ['`code`' '<code>code</code>']
+        ['[a][ID]\0a\0a[id]: https://example.com' 'href="https://example.com"']
+        ['~~~txt\0acode\0a~~~' 'class="language-txt"']
+        ['| Left | Right |\0a| :--- | ---: |\0a| a | b |' 'align="right"']
+    ==
+  %-  zing
+  %+  turn  cases
+  |=  [source=@t part=@t]
+  ^-  tang
+  =/  got=(unit @t)  (render:hm source)
+  ?~  got  (expect !>(|))
+  (expect !>(?=(^ (find (trip part) (trip u.got)))))
+::
 ++  test-restrict-html
   =/  input=manx
     ;div

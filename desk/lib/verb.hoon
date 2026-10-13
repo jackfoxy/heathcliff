@@ -147,7 +147,11 @@
   ?-  card
       [%pass * %agent * ?(%poke %poke-as) *]
     =,  q.card
-    =/  =cage  ?-(-.task.q.card %poke cage.task, %poke-as [mark.task q.cage.task])
+    =/  =cage
+      ?-  -.task.q.card
+        %poke     cage.task
+        %poke-as  [mark.task q.cage.task]
+      ==
     [%poke p.card [ship name] p.cage `@`(mug q.q.cage)]
   ::
       [%pass * %agent * ?(%watch %watch-as) *]

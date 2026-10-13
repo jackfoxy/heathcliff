@@ -36,13 +36,6 @@
 ::
 ::  +|  Reading
 ::
-++  pear
-  ::  The read and write rules in force at `pax` on `desk`, now.
-  |=  [=bowl:gall =desk pax=path]
-  ^-  [red=dict:clay wit=dict:clay]
-  =/  at=path  /(scot %p our.bowl)/[desk]/(scot %da now.bowl)
-  .^([dict:clay dict:clay] %cp (weld at pax))
-::
 ++  owns
   ::  Is a rule really set at `pax`, rather than inherited?
   ::
@@ -174,7 +167,8 @@
   ::  The permissions part of the attributes of `pax` on `desk`.
   |=  [=bowl:gall =desk pax=path cez=crews =usage]
   ^-  json
-  =/  d  (pear bowl desk pax)
+  =/  at=path  /(scot %p our.bowl)/[desk]/(scot %da now.bowl)
+  =/  d  .^([red=dict:clay wit=dict:clay] %cp (weld at pax))
   =/  s  (scan bowl desk pax)
   =/  rule
     |=  r=(unit real:clay)

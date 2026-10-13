@@ -45,6 +45,14 @@
   ?>  ?=(%& -.result)
   p.result
 ::
+++  test-file-limit
+  =/  paths=(list path)  (reap +(max-files:hd) /base/now/a/txt)
+  =/  result  (plan:hd bowl ~.req (fields /base/now paths))
+  ;:  weld
+    (expect-eq !>(10.000) !>(max-files:hd))
+    (expect-eq !>(%|) !>(-.result))
+  ==
+::
 ++  test-one-commit-for-multiple-files
   =/  paths=(list path)
     ~[/base/now/notes/a/txt /base/now/notes/sub/b/png]

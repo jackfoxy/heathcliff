@@ -58,7 +58,8 @@
     =/  text=(unit @t)  (text-field:ufiles fields 'text')
     ?~  text  [%| bad]
     ?:  (gth (met 3 u.text) limit:hm)
-      [%| (fail:ufiles %payload-too-large 413 'Markdown preview limit is 64 KiB')]
+      :-  %|
+      (fail:ufiles %payload-too-large 413 'Markdown preview limit is 64 KiB')
     =/  rendered=(unit @t)  (render:hm u.text)
     ?~  rendered
       [%| (fail:ufiles %unprocessable 422 'Markdown could not be rendered')]

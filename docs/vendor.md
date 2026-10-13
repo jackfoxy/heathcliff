@@ -1,8 +1,10 @@
 # Preview dependencies
 
-- `desk/lib/markdown.hoon`, `desk/sur/markdown.hoon`: unchanged from
+- `desk/lib/markdown.hoon`, `desk/sur/markdown.hoon`: vendored from
   [tinnus-napbus/urbit-markdown](https://github.com/tinnus-napbus/urbit-markdown),
-  commit `75f6922e7d` (2026-07-23). Heathcliff keeps its existing `%md` mark;
+  commit `75f6922e7d` (2026-07-23), with local 80-column formatting and
+  comment wrapping; parser and renderer behavior are unchanged.
+  Heathcliff keeps its existing `%md` mark;
   previewing does not rewrite file contents. `heathcliff-markdown` restricts
   the rendered HTML tags, attributes, and URL schemes.
 - `desk/web/mediainfo/`: [mediainfo.js](https://mediainfo.js.org/) 0.3.8,

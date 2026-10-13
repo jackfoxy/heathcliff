@@ -132,11 +132,30 @@
 ::
 ::  +|  Marks
 ::
+++  test-content-type-aliases
+  =/  groups=(list [marks=(list mark) expected=mite])
+    :~  [~[%txt %sh] /text/plain]
+        [~[%html %hymn %urb %snip] /text/html]
+        [~[%jpg %jpeg] /image/jpeg]
+        [~[%ogg %oga] /audio/ogg]
+        [~[%jam %noun] /application/x-urb-jam]
+    ==
+  %-  zing
+  %+  turn  groups
+  |=  [marks=(list mark) expected=mite]
+  ^-  tang
+  %-  zing
+  %+  turn  marks
+  |=  =mark
+  (expect-eq !>(`expected) !>((ctype:hc mark)))
+::
 ++  test-kin
   ;:  weld
     (expect-eq !>(`(list @tas)`~[%txt %hoon]) !>((kin:hc %hoon)))
     (expect-eq !>(`(list @tas)`~[%mime %png]) !>((kin:hc %png)))
     (expect-eq !>(`(list @tas)`~[%noun %bill]) !>((kin:hc %bill)))
+    %+  expect-eq  !>(`(list @tas)`~[%noun %txt-diff])
+    !>((kin:hc %txt-diff))
     (expect-eq !>(`(list @tas)`~[%txt]) !>((kin:hc %txt)))
     (expect-eq !>(`(list @tas)`~[%txt %sh]) !>((kin:hc %sh)))
     (expect-eq !>(`(list @tas)`~[%mime %heic]) !>((kin:hc %heic)))
@@ -166,6 +185,15 @@
   ==
 ::
 ::  +|  Inspection
+::
+++  test-hunks
+  ;:  weld
+    (expect-eq !>(`wain`~) !>((hunks:hc ~)))
+    %+  expect-eq  !>(`wain`~['= 1 unchanged line'])
+    !>((hunks:hc ~[[%& 1]]))
+    %+  expect-eq  !>(`wain`~['- old' '+ new'])
+    !>((hunks:hc ~[[%| ~['old'] ~['new']]]))
+  ==
 ::
 ++  test-dump
   =/  row=tape

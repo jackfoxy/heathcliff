@@ -246,8 +246,8 @@
         return true;
       }
       function lineFromEvent(e) {
-        // y within the code content: pointer relative to the code pre's rendered
-        // top, which already accounts for scroll since getBoundingClientRect is
+        // y within the code content: pointer relative to the code pre's
+        // rendered top, already scroll-adjusted since getBoundingClientRect is
         // viewport-relative and the pre moves as the panel scrolls.
         const rect = code.getBoundingClientRect();
         const y = e.clientY - rect.top - codeTop;

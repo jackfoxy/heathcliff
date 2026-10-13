@@ -3,7 +3,10 @@
 ::
 /+  hc=heathcliff-clay, ufiles=urui-files
 |%
+::  +|  Types
+::
 +$  pending
+  ::  The accepted selection and skipped paths awaiting one Clay commit.
   $:  eyre-id=@ta
       id=@ta
       =desk
@@ -12,9 +15,21 @@
       skipped=(list [path message=@t])
       until=@da
   ==
-+$  outcome  [cards=(list card:agent:gall) next=(unit pending)]
+::
++$  outcome
+  ::  Effects to emit and the transient batch state to retain.
+  [cards=(list card:agent:gall) next=(unit pending)]
+::
+::  +|  Constants
+::
+++  max-files
+  ::  Bound the synchronous preflight and the size of a single commit.
+  10.000
+::
+::  +|  Requests
 ::
 ++  handle
+  ::  Validate one HTTP request and start a batch, or return its refusal.
   |=  [=bowl:gall eyre-id=@ta req=inbound-request:eyre busy=?]
   ^-  outcome
   =/  no
@@ -39,6 +54,8 @@
   p.p.got
 ::
 ++  plan
+  ::  Validate every selected path before collecting one delete soba.
+  ::  Missing or unreadable files are reported without deleting them.
   |=  [=bowl:gall eyre-id=@ta fields=(map @t json)]
   ^-  (each outcome failure:ufiles)
   =/  bad=failure:ufiles  (fail:ufiles %invalid-path 400 'invalid delete batch')
@@ -46,7 +63,7 @@
   ?.  ?=([~ @ %now *] scope)  [%| bad]
   =/  value=(unit json)  (~(get by fields) 'paths')
   ?.  ?=([~ %a *] value)  [%| bad]
-  ?:  (gth (lent p.u.value) 10.000)  [%| bad]
+  ?:  (gth (lent p.u.value) max-files)  [%| bad]
   ::  Validate the entire selection before reading or emitting changes.
   =/  paths=(list path)
     %+  murn  p.u.value
@@ -95,6 +112,7 @@
   $(paths t.paths, kept [pax kept])
 ::
 ++  answer
+  ::  Report confirmed deletions, preflight skips, and the desk revision.
   |=  [job=pending revision=@ud]
   ^-  (list card:agent:gall)
   %+  reply:ufiles  eyre-id.job
@@ -110,9 +128,11 @@
   ==
 ::
 ++  path-json
+  ::  Encode a wire path as the browser's array of segments.
   |=(pax=path ^-(json [%a (turn pax |=(seg=@ta s+seg))]))
 ::
 ++  path-field
+  ::  Read a path field, rejecting malformed or unsafe segments.
   |=  [fields=(map @t json) key=@t]
   ^-  (unit path)
   =/  policy=policy:ufiles  *policy:ufiles
@@ -121,6 +141,8 @@
   u.parsed
 ::
 ++  take
+  ::  Verify the whole deletion after Clay responds; ignore stale signs.
+  ::  Timeouts and failed verification must not claim any file succeeded.
   |=  [=bowl:gall =wire =sign-arvo current=(unit pending)]
   ^-  (unit outcome)
   ?.  ?=([%batch-delete @ @ ~] wire)  ~

@@ -90,6 +90,10 @@ module.exports = async function checkTreeTransfers(browser, origin) {
     }, {path, entry});
   };
   const download = async (path, entry) => {
+    // A repeated error must come from this request, not the previous toast.
+    await page.locator('#urui-toast-message').evaluate(node => {
+      node.textContent = '';
+    });
     await context(path, entry);
     await page.getByRole('menuitem', {name: 'Download…', exact: true}).click();
   };

@@ -168,9 +168,11 @@
         target  %_(t label (crip (reference-label contents.a)))
       ==
     ::
-    ++  whitespace  (mask " \09\0d\0a")                  ::  whitespace: space, tab, or newline
+    ::  whitespace: space, tab, or newline
+    ++  whitespace  (mask " \09\0d\0a")
     ::
-    ++  all-link-ref-definitions                         :: Recursively get link ref definitions
+    ::  Recursively get link ref definitions
+    ++  all-link-ref-definitions
       =<  process-nodes
       |%
       ++  process-nodes
@@ -191,7 +193,8 @@
         |=  [node=node:markdown:m]
         ^-  (map @t urlt:ln:m)
         ?-    -.node
-            %leaf                         :: Leaf node: check if it's a link ref def
+            ::  Leaf node: check if it's a link ref def
+            %leaf
           =/  leaf=node:leaf:m  +.node
           ?.  ?=(%link-ref-definition -.leaf)  ~
           %+  ~(put by *(map @t urlt:ln:m))
@@ -323,7 +326,8 @@
 ::
 ::  Parse to and from Markdown text format
 |%
-++  de                                               ::  de:md  Deserialize (parse)
+::  de:md Deserialize (parse)
+++  de
   =<
       |=  [t=@t]
       ^-  (unit markdown:m)
@@ -334,7 +338,8 @@
     (cold char (jest (crip (snoc "\\" char))))
   ::
   ++  newline
-    %+  cold  '\0a'                                :: EOL, with or without carriage return '\0d'
+    ::  EOL, with or without carriage return '\0d'
+    %+  cold  '\0a'
     ;~(pfix ;~(pose (just '\0d') (easy ~)) (just '\0a'))
   ++  line-end                                     :: Either EOL or EOF
     %+  cold  '\0a'
@@ -364,7 +369,8 @@
             ;~  pose
               (escaped '<')
               (escaped '>')
-              ;~(less gal gar line-end prn)    :: Anything except '<', '>' or newline
+              ::  Anything except '<', '>' or newline
+              ;~(less gal gar line-end prn)
             ==
           (easy %.y)                               :: "yes triangles"
         ==
@@ -443,36 +449,55 @@
       ;~  plug
         url
         %-  punt                                 :: Optional title-text
-          ;~  pfix  title-separator               :: Separated by spaces or one line ending
-            %+  cook  crip  ;~  pose             :: Enclosed in single quote, double quote, or '(...)'
-              (ifix [soq soq] (star ;~(pose (escaped '\'') title-newline ;~(less soq prn))))
-              (ifix [doq doq] (star ;~(pose (escaped '"') title-newline ;~(less doq prn))))
-              (ifix [pal par] (star ;~(pose (escaped '(') (escaped ')') title-newline ;~(less pal par prn))))
+          ::  Separated by spaces or one line ending
+          ;~  pfix  title-separator
+            ::  Enclosed in single quote, double quote, or '(...)'
+            %+  cook  crip  ;~  pose
+              %+  ifix  [soq soq]
+              %-  star
+              ;~(pose (escaped '\'') title-newline ;~(less soq prn))
+              %+  ifix  [doq doq]
+              %-  star
+              ;~(pose (escaped '"') title-newline ;~(less doq prn))
+              %+  ifix  [pal par]
+              %-  star
+              ;~  pose
+                (escaped '(')
+                (escaped ')')
+                title-newline
+                ;~(less pal par prn)
+              ==
             ==
           ==
       ==
     ::
-    ::  Labels are used in inline link targets and in a block-level element (labeled link references)
+    ::  Labels are used in inline link targets and in a block-level element
+    ::  (labeled link references)
     ++  label
       %+  cook  crip
       %+  ifix  [sel ser]                        :: Enclosed in '[...]'
-      %+  ifix  :-  (star whitespace)            :: Strip leading and trailing whitespapce
+      ::  Strip leading and trailing whitespapce
+      %+  ifix  :-  (star whitespace)
                     (star whitespace)
       %-  plus  ;~  pose                         :: Non-empty
         (escaped '[')
         (escaped ']')
-        ;~(less sel ser prn)                     :: Anything except '[', ']' (must be escaped)
+        ::  Anything except '[', ']' (must be escaped)
+        ;~(less sel ser prn)
       ==
     ::
-    ++  target                                   :: Link target, either reference or direct
+    ::  Link target, either reference or direct
+    ++  target
       =<  %+  cook  |=(a=target:ln:m a)
           ;~(pose target-direct target-ref)
       |%
       ++  target-direct
         %+  cook  |=(a=target:ln:m a)
         %+  stag  %direct
-        %+  ifix  [pal par]                        :: Direct links are enclosed in '(...)'
-        %+  ifix  :-  (star whitespace)            :: Strip leading and trailing whitespace
+        ::  Direct links are enclosed in '(...)'
+        %+  ifix  [pal par]
+        ::  Strip leading and trailing whitespace
+        %+  ifix  :-  (star whitespace)
                       (star whitespace)
         urlt                                       :: Just the target
       ++  target-ref
@@ -519,7 +544,8 @@
         (cook |=(e=element:inline:m `token`[%node e]) literal-tics)
         (cook |=(e=element:inline:m `token`[%node e]) nested)
         (cook |=(e=element:inline:m `token`[%node e]) autolink)
-        (cook |=(e=element:inline:m `token`[%node e]) (text-with nested stopper))
+        %+  cook  |=(e=element:inline:m `token`[%node e])
+        (text-with nested stopper)
         (cook |=(e=element:inline:m `token`[%node e]) softbrk)
         (cook |=(e=element:inline:m `token`[%node e]) hardbrk)
       ==
@@ -693,7 +719,8 @@
       ?>  ?=(%delimiter -.opening)
       ?>  ?=(%delimiter -.closing)
       =/  middle=(list token)
-        (scag (sub close-index.match +(open-index.match)) (slag +(open-index.match) tokens))
+        %+  scag  (sub close-index.match +(open-index.match))
+        (slag +(open-index.match) tokens)
       =/  wrapped=element:inline:m
         ?:  =('~' char.opening)
           [%strikethru use-count.match (tokens-to-elements middle)]
@@ -862,8 +889,10 @@
       =<  parser
       |%
       ++  xml-node
-        =,  de-xml:^html                           :: This is a copy-paste of `apex:de-xml:html` except
-        =+  spa=;~(pose comt whit)                 :: it doesn't eat trailing whitespace
+        ::  This is a copy-paste of `apex:de-xml:html` except
+        =,  de-xml:^html
+        ::  it doesn't eat trailing whitespace
+        =+  spa=;~(pose comt whit)
         %+  knee  *manx  |.  ~+
         ;~  pfix
           ;~(plug (more spa decl) (star spa))
@@ -983,7 +1012,8 @@
       %+  stag  %text
       %+  cook  crip
       %-  plus                                   :: At least one character
-      ;~  less                                   :: ...which doesn't match any other inline rule
+      ::  ...which doesn't match any other inline rule
+      ;~  less
         ;~(simu gal html)
         escape
         entity
@@ -1021,7 +1051,8 @@
       %+  ifix  [pam mic]
       %+  cook  crip
       ;~  pose
-        ;~  plug                              :: '#' + 'x'/'X' + one to six hex digits
+        ::  '#' + 'x'/'X' + one to six hex digits
+        ;~  plug
           hax
           (mask "xX")
           (stun [1 6] ;~(pose nud (shim 'a' 'f') (shim 'A' 'F')))
@@ -1043,7 +1074,8 @@
       %+  stag  %line-break
       %+  cold  ~
       ;~  pose
-        ;~(plug (jest '  ') (star ace) newline)   :: Two or more spaces before a newline
+        ::  Two or more spaces before a newline
+        ;~(plug (jest '  ') (star ace) newline)
         ;~(plug (just '\\') newline)              :: An escaped newline
       ==
     ++  link
@@ -1051,7 +1083,8 @@
       %+  cook  backfill-ref-link
       %+  stag  %link
       ;~  plug
-        %+  ifix  [sel ser]                      :: Display text is wrapped in '[...]'
+        ::  Display text is wrapped in '[...]'
+        %+  ifix  [sel ser]
           (label-contents image ser)
         target:ln
       ==
@@ -1125,7 +1158,8 @@
         ?~  maybe-close
           [p.after-opening ~]
         =/  advance-vex
-          ((stun [consumed.u.maybe-close consumed.u.maybe-close] next) after-opening)
+          %-  (stun [consumed.u.maybe-close consumed.u.maybe-close] next)
+          after-opening
         ?~  q.advance-vex  !!
         :+  p.advance-vex
           ~
@@ -1235,10 +1269,13 @@
         ;~  pfix
           (stun [0 3] ace)                     :: Ignore up to 3 leading spaces
           ;~  plug
-            (cook |=(a=tape (lent a)) (stun [1 6] hax))                   :: Heading level
-            %+  ifix  [(plus ace) atx-eol]     :: One leading space is required; rest is ignored
+            ::  Heading level
+            (cook |=(a=tape (lent a)) (stun [1 6] hax))
+            ::  One leading space is required; rest is ignored
+            %+  ifix  [(plus ace) atx-eol]
               %-  star
-              ;~(less atx-eol prn)             :: Trailing haxes/spaces are ignored
+              ::  Trailing haxes/spaces are ignored
+              ;~(less atx-eol prn)
           ==
         ==
       ++  setext
@@ -1247,15 +1284,19 @@
           |=  [text=tape level=@]
           [level (scan text contents:inline)]
         ;~  plug                                   :: Wow this is a mess
-          %+  ifix  [(stun [0 3] ace) (star ace)]  :: Strip up to 3 spaces, and trailing space
+          ::  Strip up to 3 spaces, and trailing space
+          %+  ifix  [(stun [0 3] ace) (star ace)]
             (star ;~(less ;~(pfix (star ace) newline) prn))     :: Any text...
           ;~  pfix
             newline                         :: ...followed by newline...
-            (stun [0 3] ace)                     :: ...up to 3 spaces (stripped)...
+            ::  ...up to 3 spaces (stripped)...
+            (stun [0 3] ace)
             ;~  sfix
               ;~  pose                             :: ...and an underline
-                (cold 1 (plus (just '-')))         :: Underlined by '-' means heading lvl 1
-                (cold 2 (plus (just '=')))         :: Underlined by '=' means heading lvl 2
+                ::  Underlined by '-' means heading lvl 1
+                (cold 1 (plus (just '-')))
+                ::  Underlined by '=' means heading lvl 2
+                (cold 2 (plus (just '=')))
               ==
               ;~(plug (star ace) line-end)
             ==
@@ -1268,10 +1309,12 @@
       %+  cook
         |=  [first-2=@t trailing=tape]
         [(head trailing) (add 2 (lent trailing))]
-      %+  ifix  :-  (stun [0 3] ace)                  :: Strip indent and trailing space
+      ::  Strip indent and trailing space
+      %+  ifix  :-  (stun [0 3] ace)
                     ;~  plug
                       (star (mask " \09"))
-                      line-end                    :: No other chars allowed on the line
+                      ::  No other chars allowed on the line
+                      line-end
                     ==
         ;~  pose
           ;~(plug (jest '**') (plus tar))       :: At least 3, but can be more
@@ -1281,7 +1324,8 @@
     ::
     ++  codeblk-indent
       =>  |%
-          ++  indented-chunk                   :: A block of indented code, delimited by newlines
+          ::  A block of indented code, delimited by newlines
+          ++  indented-chunk
             %+  cook  |=(a=(list tape) (zing a))
             %-  plus                           :: 1 or more lines
             ;~  pfix  (jest '    ')            :: with 4 leading spaces
@@ -1299,7 +1343,8 @@
         %-  star
         %+  cook  |=([newlines=tape chunk=tape] `tape`(welp newlines chunk))
         ;~  plug
-          (star newline)                         :: separated by zero or more blank lines
+          ::  separated by zero or more blank lines
+          (star newline)
           indented-chunk
         ==
       ==
@@ -1313,7 +1358,8 @@
           ++  code-fence
             ;~  plug
               %+  cook  |=(a=tape (lent a))  (stun [0 3] ace)
-              %+  cook  |=(a=tape [(head a) (lent a)])   :: Get code fence char and length
+              ::  Get code fence char and length
+              %+  cook  |=(a=tape [(head a) (lent a)])
               ;~  pose
                 (stun [3 999.999.999] sig)
                 (stun [3 999.999.999] tic)
@@ -1325,8 +1371,10 @@
             %+  cook  crip
             %+  ifix  [(star ace) line-end]    :: Strip leading whitespace
             ?:  =(fence-char '`')
-              (star ;~(less line-end tic prn)) :: No backticks after a backtick fence
-            (star ;~(less line-end prn))       :: Tilde fences may contain backticks
+              ::  No backticks after a backtick fence
+              (star ;~(less line-end tic prn))
+            ::  Tilde fences may contain backticks
+            (star ;~(less line-end prn))
           --
       |*  =nail
       :: Get the marker and indent size
@@ -1336,8 +1384,10 @@
       =/  closing-fence
         ;~  plug
           (star ace)
-          (stun [len 999.999.999] (just char))   :: Closing fence must be at least as long as opener
-          (star ace)                             :: ...and cannot have any following text except space
+          ::  Closing fence must be at least as long as opener
+          (stun [len 999.999.999] (just char))
+          ::  ...and cannot have any following text except space
+          (star ace)
           line-end
         ==
       :: Read the rest of the list item block
@@ -1353,8 +1403,10 @@
         %+  cook  |=(a=(list tape) (crip (zing a)))
         ;~  sfix
           %-  star                               :: Any amount of lines
-          ;~  less  closing-fence                :: ...until the closing code fence
-            ;~  pfix  (stun [0 indent] ace)      :: Strip indent up to that of the opening fence
+          ::  ...until the closing code fence
+          ;~  less  closing-fence
+            ::  Strip indent up to that of the opening fence
+            ;~  pfix  (stun [0 indent] ace)
               %+  cook  |=(a=tape a)
               ;~  pose                           :: Avoid infinite loop at EOF
                 %+  cook  trip  newline     :: A line is either a blank line...
@@ -1375,8 +1427,10 @@
       %+  stag  %link-ref-definition
       %+  ifix  [(stun [0 3] ace) line-end]            :: Strip leading space
         ;~  plug
-          ;~(sfix label:ln col)                 :: Label (enclosed in "[...]"), followed by col ":"
-          ;~  pfix                                :: Optional whitespace, including up to 1 newline
+          ::  Label (enclosed in "[...]"), followed by col ":"
+          ;~(sfix label:ln col)
+          ::  Optional whitespace, including up to 1 newline
+          ;~  pfix
             (star ace)
             (stun [0 1] newline)
             (star ace)
@@ -1539,9 +1593,13 @@
             (contains "</style>" lower)
             (contains "</textarea>" lower)
         ==
-      ++  type-two-start  |=(line=tape (starts-with "<!--" (prepared-line line)))
+      ++  type-two-start
+        |=  line=tape
+        (starts-with "<!--" (prepared-line line))
       ++  type-two-end    |=(line=tape (contains "-->" line))
-      ++  type-three-start  |=(line=tape (starts-with "<?" (prepared-line line)))
+      ++  type-three-start
+        |=  line=tape
+        (starts-with "<?" (prepared-line line))
       ++  type-three-end    |=(line=tape (contains "?>" line))
       ++  type-four-start
         |=  line=tape
@@ -1551,7 +1609,9 @@
         ?~  line  %.n
         (is-alpha i.line)
       ++  type-four-end  |=(line=tape (contains ">" line))
-      ++  type-five-start  |=(line=tape (starts-with "<![CDATA[" (prepared-line line)))
+      ++  type-five-start
+        |=  line=tape
+        (starts-with "<![CDATA[" (prepared-line line))
       ++  type-five-end    |=(line=tape (contains "]]>" line))
       ::
       ++  block-tags
@@ -1740,17 +1800,20 @@
     ++  paragraph
       %+  cook  |=(a=paragraph:leaf:m a)
       %+  stag  %paragraph
-      %+  cook                                   :: Reparse the paragraph text as elements
+      ::  Reparse the paragraph text as elements
+      %+  cook
         |=  lines=(list tape)
         =/  source=tape  (paragraph-source lines)
         (scan source contents:inline)
-      %-  plus                                   :: Read lines until a non-paragraph object is found
+      ::  Read lines until a non-paragraph object is found
+      %-  plus
         ;~  less
           heading
           break
           codeblk-fenced
           html-interrupting
-          interrupting-node:container        :: Block quotes and eligible lists can interrupt paragraphs
+          ::  Block quotes and eligible lists can interrupt paragraphs
+          interrupting-node:container
           %+  cook  snoc  ;~  plug
             %-  plus  ;~(less line-end prn)  :: Lines must be non-empty
             line-end
@@ -1825,7 +1888,12 @@
             [i.cell $(cell t.cell)]
           ::
           ++  split-row-inner
-            |=  [remaining=tape current=tape cells=(list tape) escaped=? saw-bar=?]
+            |=  $:  remaining=tape
+                    current=tape
+                    cells=(list tape)
+                    escaped=?
+                    saw-bar=?
+                ==
             ^-  [saw-bar=? cells=(list tape)]
             ?~  remaining
               =/  cells  [i=(flop current) t=cells]
@@ -1920,19 +1988,26 @@
             :-  i.row
             $(width (dec width), row t.row)
           --
-      |*  =nail :: Make it a (redundant) gate so I can use `=>` to add a helper core
+      ::  Make it a (redundant) gate so I can use `=>` to add a helper core
+      |*  =nail
       %.  nail  :: apply the following parser
       %+  sear
-        |=  [hdr=(list cell-t) del=(list [len=@ al=?(%c %r %l %n)]) bdy=(list (list cell-t))]
+        |=  $:  hdr=(list cell-t)
+                del=(list [len=@ al=?(%c %r %l %n)])
+                bdy=(list (list cell-t))
+            ==
         ^-  (unit table:leaf:m)
         =/  column-count  (lent hdr)
         ?:  ?|  =(0 column-count)
                 !=(column-count (lent del))
             ==
           ~
-        =.  bdy  (turn bdy |=(body-row=(list cell-t) (fit-row column-count body-row)))
+        =.  bdy
+          %+  turn  bdy
+          |=(body-row=(list cell-t) (fit-row column-count body-row))
         =/  widths=(list @)  (turn del |=([len=@ al=*] len))
-        =/  rows=(list (list cell-t))  (snoc bdy hdr)  :: since they're the same data type
+        ::  since they're the same data type
+        =/  rows=(list (list cell-t))  (snoc bdy hdr)
         =/  computed-widths
           |-
           ?~  rows  widths
@@ -1951,7 +2026,9 @@
               computed-widths
               (turn hdr |=(cell=cell-t contents.cell))
               (turn del |=([len=@ al=?(%c %r %l %n)] al))
-              (turn bdy |=(body-row=(list cell-t) (turn body-row |=(cell=cell-t contents.cell))))
+              %+  turn  bdy
+              |=  body-row=(list cell-t)
+              (turn body-row |=(cell=cell-t contents.cell))
           ==
         `result
       ;~  plug
@@ -2001,7 +2078,8 @@
         ::
         +$  ul-marker-t  [indent=@ char=@t len=@]
         ++  ul-marker
-          %+  cook                               :: Compute the length of the whole thing
+          ::  Compute the length of the whole thing
+          %+  cook
             |=  [prefix=tape bullet=@t suffix=tape]
             ^-  ul-marker-t
             :*  (lent prefix)
@@ -2069,7 +2147,8 @@
         ::
         +$  ol-marker-t  [indent=@ char=@t number=@ len=@]
         ++  ol-marker
-          %+  cook                               :: Compute the length of the whole thing
+          ::  Compute the length of the whole thing
+          %+  cook
             |=  [prefix=tape number=@ char=@t suffix=tape]
             ^-  ol-marker-t
             :*  (lent prefix)
@@ -2261,8 +2340,10 @@
         ;~  pose
           block-quote-line
           %+  cook  zing
-          %-  plus              :: Paragraph continuation (copied from `paragraph` above)
-          ;~  less                     :: ...basically just text that doesn't matchZ anything else
+          ::  Paragraph continuation (copied from `paragraph` above)
+          %-  plus
+          ::  ...basically just text that doesn't matchZ anything else
+          ;~  less
             heading:leaf
             break:leaf
             :: ol
@@ -2280,7 +2361,8 @@
     ::
     ++  ul
       |*  =nail
-      :: Start by finding the type of the first bullet (indent level and bullet char)
+      ::  Start by finding the type of the first bullet (indent level and bullet
+      ::  char)
       =/  vex  (ul-item nail)
       ?~  q.vex  vex  :: Fail if it doesn't match a list item
       =/  first-item=ul-item-t  p:(need q.vex)
@@ -2293,7 +2375,9 @@
         :*  %ul
             indent.first-item
             char.first-item
-            (list-items (add-task-checkbox task.first-item markdown.first-item) rest)
+            %+  list-items
+              (add-task-checkbox task.first-item markdown.first-item)
+            rest
         ==
       %-  star
       ;~  pose
@@ -2353,7 +2437,8 @@
     ::
     ++  tl
       |*  =nail
-      :: Start by finding the type of the first bullet (indent level and bullet char)
+      ::  Start by finding the type of the first bullet (indent level and bullet
+      ::  char)
       =/  vex  (tl-item nail)
       ?~  q.vex  vex  :: Fail if it doesn't match a list item
       =/  first-item=tl-item-t  p:(need q.vex)
@@ -2367,7 +2452,8 @@
         (easy char.first-item)
         (easy [is-checked.first-item markdown.first-item])
         %-  star
-          %+  sear                                 :: Reject items that don't have the same bullet char
+          ::  Reject items that don't have the same bullet char
+          %+  sear
             |=  [item=tl-item-t]
             ^-  (unit [is-checked=? markdown:m])
             ?.  =(char.item char.first-item)
@@ -2418,7 +2504,8 @@
         ==
       ++  without-triangles
         |=  [text=@t]
-        (escape-chars text "()")               :: Escape all parentheses '(' and ')'
+        ::  Escape all parentheses '(' and ')'
+        (escape-chars text "()")
       --
     ++  urlt
       |=  [u=urlt:ln:m]
@@ -2518,7 +2605,8 @@
     ++  escape
       |=  [e=escape:inline:m]
       ^-  tape
-      (snoc "\\" char.e)                 :: Could use `escape-chars` but why bother-- this is shorter
+      ::  Could use `escape-chars` but why bother-- this is shorter
+      (snoc "\\" char.e)
     ::
     ++  softbrk
       |=  [s=softbrk:inline:m]
@@ -2616,7 +2704,9 @@
         |=  [a=(list tape)]
         ^-  tape
         %-  zing  %+  turn  a  |=(t=tape (weld "    " t))
-      %-  plus  %+  cook  snoc  ;~(plug (star ;~(less (just '\0a') prn)) (just '\0a'))
+      %-  plus
+      %+  cook  snoc
+      ;~(plug (star ;~(less (just '\0a') prn)) (just '\0a'))
     ::
     ++  codeblk-fenced
       |=  [c=codeblk-fenced:leaf:m]
@@ -2628,10 +2718,12 @@
         "\0a"
         ^-  tape  %+  rash  text.c
         %+  cook  zing  %-  star                   :: Many lines
-          %+  cook  |=  [a=tape newline=@t]        :: Prepend each line with "> "
+          ::  Prepend each line with "> "
+          %+  cook  |=  [a=tape newline=@t]
                     ^-  tape
                     ;:  weld
-                        ?~(a "" (reap indent-level.c ' '))   :: If the line is blank, no indent
+                        ::  If the line is blank, no indent
+                        ?~(a "" (reap indent-level.c ' '))
                         a
                         "\0a"
                     ==
@@ -2779,7 +2871,8 @@
                   ^-  tape
                   ;:  weld
                     ">"
-                    ?~(a "" " ")                 :: If the line is blank, no trailing space
+                    ::  If the line is blank, no trailing space
+                    ?~(a "" " ")
                     a
                     "\0a"
                   ==
@@ -2794,10 +2887,12 @@
       %-  zing  %+  turn  contents.u             :: Each bullet point...
         |=  [item=markdown:m]
         ^-  tape
-        %+  scan  (markdown item)                   :: First, render bullet point contents
+        ::  First, render bullet point contents
+        %+  scan  (markdown item)
         %+  cook  zing
         ;~  plug
-          %+  cook  |=  [a=tape]                 :: Prepend 1st line with indent + bullet char
+          ::  Prepend 1st line with indent + bullet char
+          %+  cook  |=  [a=tape]
                     ;:  weld
                       (reap indent-level.u ' ')
                       (trip marker-char.u)
@@ -2806,7 +2901,8 @@
                     ==
             line  :: first line
           %-  star
-            %+  cook  |=  [a=tape]               :: Subsequent lines just get indent
+            ::  Subsequent lines just get indent
+            %+  cook  |=  [a=tape]
                       ?:  ?|  =("" a)
                               =("\0a" a)
                           ==
@@ -2824,10 +2920,12 @@
       %-  zing  %+  turn  contents.t             :: Each bullet point...
         |=  [is-checked=? item=markdown:m]
         ^-  tape
-        %+  scan  (markdown item)                   :: First, render bullet point contents
+        ::  First, render bullet point contents
+        %+  scan  (markdown item)
         %+  cook  zing
         ;~  plug
-          %+  cook  |=  [a=tape]                 :: Prepend 1st line with indent, bullet char, checkbox
+          ::  Prepend 1st line with indent, bullet char, checkbox
+          %+  cook  |=  [a=tape]
                     ;:  weld
                       (reap indent-level.t ' ')
                       (trip marker-char.t)
@@ -2838,7 +2936,8 @@
                     ==
             line  :: first line
           %-  star
-            %+  cook  |=  [a=tape]               :: Subsequent lines just get indent
+            ::  Subsequent lines just get indent
+            %+  cook  |=  [a=tape]
                       ?:  ?|  =("" a)
                               =("\0a" a)
                           ==
@@ -2857,10 +2956,12 @@
       %-  zing  %+  turn  contents.o             :: Each item...
         |=  [item=markdown:m]
         ^-  tape
-        %+  scan  (markdown item)                   :: First, render item contents
+        ::  First, render item contents
+        %+  scan  (markdown item)
         %+  cook  zing
         ;~  plug
-          %+  cook  |=  [a=tape]                 :: Prepend 1st line with indent + item number
+          ::  Prepend 1st line with indent + item number
+          %+  cook  |=  [a=tape]
                     ;:  weld
                       (reap indent-level.o ' ')
                       (a-co:co start-num.o)
@@ -2870,7 +2971,8 @@
                     ==
             line  :: first line
           %-  star
-            %+  cook  |=  [a=tape]               :: Subsequent lines just get indent
+            ::  Subsequent lines just get indent
+            %+  cook  |=  [a=tape]
                       ?:  ?|  =("" a)
                               =("\0a" a)
                           ==
@@ -2945,7 +3047,9 @@
           ^-  (unit urlt:ln:m)
           ?-  -.target
             %direct  `urlt.target
-            %ref     (~(get by reference-links) (normalize-reference-label label.target))
+            %ref
+          %-  ~(get by reference-links)
+          (normalize-reference-label label.target)
           ==
         ++  get-direct-link  :: DUPE: get-direct-link
           |=  [=target:ln:m]
@@ -2999,11 +3103,13 @@
     ++  text
       |=  [t=text:inline:m]
       ^-  manx
-      [[%$ [%$ (trip text.t)] ~] ~]  :: Magic; look up the structure of a `manx` if you want
+      ::  Magic; look up the structure of a `manx` if you want
+      [[%$ [%$ (trip text.t)] ~] ~]
     ++  escape
       |=  [e=escape:inline:m]
       ^-  manx
-      [[%$ [%$ (trip char.e)] ~] ~]  :: Magic; look up the structure of a `manx` if you want
+      ::  Magic; look up the structure of a `manx` if you want
+      [[%$ [%$ (trip char.e)] ~] ~]
     ++  entity
       |=  [e=entity:inline:m]
       ^-  manx
@@ -3111,14 +3217,16 @@
         %html  (html n)
         %table  (table n)
         %paragraph  (paragraph n)
-        %link-ref-definition  (text:inline [%text ' '])  :: Link ref definitions don't render as anything
+        ::  Link ref definitions don't render as anything
+        %link-ref-definition  (text:inline [%text ' '])
         :: ...etc
       ==
     ++  heading
       |=  [h=heading:leaf:m]
       ^-  manx
       :-
-        :_  ~   ?+  level.h  !!                     :: Tag and attributes; attrs are empty (~)
+        ::  Tag and attributes; attrs are empty (~)
+        :_  ~   ?+  level.h  !!
                   %1  %h1
                   %2  %h2
                   %3  %h3
@@ -3170,7 +3278,14 @@
                 =/  align  align.t
                 |-
                   ?~  hdr  ~
-                  :-  ;th(align ?-((head align) %c "center", %r "right", %l "left", %n ""))
+                  =/  alignment
+                    ?-  (head align)
+                      %c  "center"
+                      %r  "right"
+                      %l  "left"
+                      %n  ""
+                    ==
+                  :-  ;th(align alignment)
                         ;*  (contents:inline (head hdr))
                       ==
                   $(hdr (tail hdr), align (tail align))
@@ -3186,7 +3301,14 @@
                     =/  align  align.t
                     |-
                       ?~  row  ~
-                      :-  ;td(align ?-((head align) %c "center", %r "right", %l "left", %n ""))
+                      =/  alignment
+                        ?-  (head align)
+                          %c  "center"
+                          %r  "right"
+                          %l  "left"
+                          %n  ""
+                        ==
+                      :-  ;td(align alignment)
                             ;*  (contents:inline (head row))
                           ==
                       $(row (tail row), align (tail align))
@@ -3266,9 +3388,10 @@
             |=  [is-checked=? a=markdown:m]
             ^-  manx
             ;li
-              ;+  ?:  is-checked
-                    ;input(type "checkbox", checked "true", disabled "disabled");
-                  ;input(type "checkbox", disabled "disabled");
+              ;+
+                ?:  is-checked
+                  ;input(type "checkbox", checked "true", disabled "disabled");
+                ;input(type "checkbox", disabled "disabled");
               ;*  (~(. markdown reference-links) a)
       ==    ==
     ::
