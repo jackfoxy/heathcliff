@@ -59,7 +59,8 @@
 ::
 ++  on-arvo
   |=  [=wire =sign-arvo]
-  ~|  "unexpected system response {<-.sign-arvo>} to {<dap.bowl>} on wire {<wire>}"
+  ~|  "unexpected system response {<-.sign-arvo>} ".
+      "to {<dap.bowl>} on wire {<wire>}"
   !!
 ::
 ++  on-fail
