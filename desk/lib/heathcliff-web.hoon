@@ -238,7 +238,7 @@
           =type      "button"
           =title     "Download the active file at its selected revision"
           =disabled  ""
-          Download…
+          ;+  ;/  "Download…"
         ==
         ;button#hc-upload-button
           =type   "button"

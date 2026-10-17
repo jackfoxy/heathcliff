@@ -67,3 +67,4 @@ and uses `[%md %mime]` in `heathcliff-clay` `codecs`.
 urui Hoon suites (files 32, js 15, shell 32, config 12 arms), doubles
 (13 + 7 scenarios), Chromium 65 passed, purity ok; graph-viz Chromium 18
 passed; obelisk-web lib compiles. Owner: `-test` on `%graph-viz`/`%obelisk`.
+- 2026-10-17: .pane-actions made a flex row with stretched items so the copy icon button matches the height of the text buttons
