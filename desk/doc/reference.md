@@ -34,9 +34,10 @@ the editor's key combinations. Changes require an authenticated ship session.
 
 | Control | Action |
 | --- | --- |
-| Download… | Immediately left of New File. Download the active file at its selected revision. Disabled for a draft with no saved path. Downloads committed content, not unsaved editor changes. |
-| New File | Open a new empty draft, preserving other tabs. Located to the left of Save. |
+| Download… | Immediately left of Save. Download the active file at its selected revision. Disabled for a draft with no saved path. Downloads committed content, not unsaved editor changes. |
+| + (New file tab) | Open a new empty draft, preserving other tabs. Located at the end of the file tabs. |
 | Save | Save the active editable file, including an empty draft. For drafts, browse desk trees to build a destination path, then type any new folders and `name.mark`. Saving historical text asks to create a current version. Disabled when the active file is read-only. |
+| Save As… | Choose a destination and save the active file there. Located immediately right of Save, with the same enable/disable rules. |
 | Copy | Copy the source text to the clipboard. |
 | Result tree disclosure arrow | Expand or collapse JSON/XML nodes. |
 | Download in a preview | Download the committed file when a preview offers this fallback. |

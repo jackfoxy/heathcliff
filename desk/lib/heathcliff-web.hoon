@@ -54,8 +54,8 @@
               starter=''
               roots=~[[~ ~ ~ &]]
               preview=~
-              actions=~[%new %save %copy]
-              refs=|
+              actions=~[%save %save-as %copy]
+              refs=&
               share=~
           ==
       ==
@@ -88,6 +88,8 @@
       ['explorerOrder' %urui %scalar ~]
       ['docsTabs' %urui %tabs ~]
       ['nextDocs' %urui %next ~]
+      ['refTabs' %urui %tabs ~]
+      ['nextRef' %urui %next ~]
       ['clayTabs' %urui %tabs `%clay]
       ['activeClayTabId' %urui %active `%clay]
       ['nextClayTab' %urui %next `%clay]
@@ -190,7 +192,7 @@
                   source=%documents
                   kind=`%clay
                   fixed=~
-                  add=~
+                  add=`'New file tab'
                   close=&
                   reorder=&
               ==
@@ -3017,7 +3019,7 @@
       event.preventDefault();
       acceptRevision();
     });
-    el('clay-new').before(el('hc-download-button'));
+    el('clay-save').before(el('hc-download-button'));
     el('hc-download-button').classList.add('store-action');
     el('hc-download-button').addEventListener('click', () => {
       const path = runtime.documents.active(store)?.path;

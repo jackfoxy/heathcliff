@@ -26,14 +26,33 @@ module.exports = async function checkNewFile(browser, origin) {
   try {
     await page.goto(origin + '/heathcliff');
     await page.waitForFunction(() => window.hcTest?.runtime.documents.editor('clay'));
-    assert.equal(await page.locator('#clay-new + #clay-save').count(), 1);
-    assert.equal(await page.locator('#clay-new').innerText(), 'New File');
+    assert.equal(await page.locator('#clay-new').count(), 0);
+    assert.equal(await page.locator('#clay-save + #clay-save-as').count(), 1);
+    assert(await page.locator('#clay-save-as').isEnabled());
+    await page.locator('#clay-save-as').click();
+    assert(await page.getByLabel('Save destinations').isVisible());
+    await page.locator('#urui-file-dialog-cancel').click();
+    const newFile = page.getByRole('button', {name: 'New file tab', exact: true});
+    assert.equal(await newFile.innerText(), '+');
+    assert(await newFile.evaluate(button =>
+      button.parentElement === button.parentElement.parentElement.lastElementChild));
     const before = await page.evaluate(() => {
       const docs = window.hcTest.runtime.documents;
       docs.editor('clay').setSource('keep this draft');
       return docs.active('clay').id;
     });
-    await page.locator('#clay-new').click();
+    await page.locator(`[data-document-tab="${before}"]`).locator('..')
+      .dragTo(page.locator('#explorer-pane'));
+    await page.waitForFunction(() =>
+      document.querySelector('.ref-source')?.textContent === 'keep this draft');
+    assert.equal(await page.locator('.ref-source textarea, .ref-source input').count(), 0);
+    await page.evaluate(() =>
+      window.hcTest.runtime.documents.editor('clay').setSource('updated draft'));
+    await page.waitForFunction(() =>
+      document.querySelector('.ref-source')?.textContent === 'updated draft');
+    await page.evaluate(() =>
+      window.hcTest.runtime.documents.editor('clay').setSource('keep this draft'));
+    await newFile.click();
     assert.equal(await page.evaluate(() => window.hcTest.runtime.documents.active('clay').text), '');
     await page.locator('#clay-save').click();
     const tree = page.getByLabel('Save destinations');
@@ -60,7 +79,7 @@ module.exports = async function checkNewFile(browser, origin) {
     assert.deepEqual(saves[0].path, ['other', 'now', 'new', 'nested', 'empty', 'txt']);
     assert.equal(saves[0].text, '');
     assert.equal(await page.evaluate(id => window.hcTest.runtime.documents.get('clay', id).text, before), 'keep this draft');
-    await page.locator('#clay-new').click();
+    await newFile.click();
     await page.evaluate(() => window.hcTest.runtime.documents.editor('clay').setSource('replacement'));
     await page.locator('#clay-save').click();
     await tree.locator('summary', {hasText: '%base /'}).click();

@@ -6,5 +6,5 @@
   version+[1 0 0]
   website+'https://github.com/jackfoxy/heathcliff'
   license+'MIT'
-  site+/heathcliff
+  site+/apps/heathcliff
 ==
