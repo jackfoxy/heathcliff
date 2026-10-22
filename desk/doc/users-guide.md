@@ -171,7 +171,9 @@ its data is still stored; for a folder how many items it holds.
 File tabs use `name.mark` at the current revision and `name.mark version N`
 for a historical revision. Opening the same item's attributes again selects
 its existing reference tab. Different files and revisions can stay open
-side by side; the source and result panes remain usable.
+side by side; the source and result panes remain usable. Drag a file from
+either explorer tree into the reference pane to open its attributes. Drag
+reference tabs or source tabs to reorder them.
 Double-click a file's Attributes or Permissions tab to open that file in
 the source and display panes at the tab's revision.
 

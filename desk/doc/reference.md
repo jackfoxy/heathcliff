@@ -19,11 +19,11 @@ the editor's key combinations. Changes require an authenticated ship session.
 | Apps tab | Browse every desk's complete file tree. |
 | Data tab | Browse each desk's `/data` tree. A sole folder named for its desk is flattened in this view. |
 | Desk/folder disclosure arrow or name | Expand or collapse its children. |
-| File name | Select the file; double-click to open it. |
+| File name | Select the file; double-click to open it. Drag it into the reference pane to open its attributes. |
 | Item … button | Open the item's context menu. Right-click, Shift+F10, or the context-menu key opens the same menu. |
 | Source file tab | Select an open document and its result preview. Drag tabs to reorder them. |
 | Source tab close (×, or ● for unsaved changes) | Close that document; confirm discarding unsaved changes when asked. |
-| Attributes/Permissions reference tab | Select that item's information at its saved revision. Double-click a file reference tab to open the file. |
+| Attributes/Permissions reference tab | Select that item's information at its saved revision. Double-click a file reference tab to open the file. Drag tabs to reorder them. |
 | Reference/documentation tab close (×) | Close the reference or documentation tab. |
 | Documentation tab | Select its help page. |
 | Pane collapse/expand arrow | Hide or restore the associated pane or band. |

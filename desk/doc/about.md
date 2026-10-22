@@ -1,6 +1,6 @@
 # About Heathcliff and Ace editor
 
-Heathcliff for Urbit v1.0.0
+Heathcliff for Urbit v1.1.0
 
 A Clay filesystem explorer for browsing desks, editing text, previewing
 files, transferring files, deleting and tombstoning files, and managing permissions,

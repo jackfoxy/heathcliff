@@ -603,6 +603,24 @@
       return node;
     }
 
+    function enableTabDragHandles() {
+      const selector =
+        '.explorer-tab, .docs-tab, .ref-tab, .document-tab';
+      const enable = (root) => {
+        if (!(root instanceof Element)) return;
+        if (root.matches(selector)) root.draggable = true;
+        for (const control of root.querySelectorAll(selector)) {
+          control.draggable = true;
+        }
+      };
+      enable(document.body);
+      new MutationObserver((records) => {
+        for (const record of records) {
+          for (const node of record.addedNodes) enable(node);
+        }
+      }).observe(document.body, {childList: true, subtree: true});
+    }
+
     // ---- the server ----------------------------------------------------
     async function api(op, body = {}, url = `${base}/api`) {
       const response = await fetch(url, {
@@ -852,6 +870,10 @@
         if (!tomb) openFile(wire);
       });
       button.addEventListener('keydown', menuKeys(view, button, target));
+      runtime.explorer.refs.draggable(button, () => ({
+        kind: 'attributes', parentId: JSON.stringify(wire),
+        path: [...wire], entry: 'file'
+      }));
       row.addEventListener('contextmenu', (event) => {
         setSelected(view, target);
         openMenu(view, button, event, target);
@@ -2981,6 +3003,7 @@
         }
       }
     });
+    enableTabDragHandles();
     const uploadSettings = make('fieldset', {class: 'settings-field'},
       make('legend', {class: 'settings-label', text: 'Apps uploads'}));
     const uploadChoices = new Map();
