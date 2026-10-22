@@ -21,20 +21,67 @@ module.exports = async function checkNewFile(browser, origin) {
       }
       return reply({ok: true, hash: 'saved-' + saves.length});
     }
+    if (data.op === 'attributes') return reply({ok: true,
+      target: {kind: 'file', label: 'old.txt', mark: 'txt', ship: '~zod',
+        desk: 'base', title: 'base', case: 'now', clay: '/data/notes/old/txt'},
+      current: true, head: 3,
+      file: {size: 3, type: 'text/plain', tombstoned: false}});
     return reply({ok: true, entries: []});
   });
   try {
     await page.goto(origin + '/heathcliff');
     await page.waitForFunction(() => window.hcTest?.runtime.documents.editor('clay'));
-    assert.equal(await page.locator('#clay-new + #clay-save').count(), 1);
-    assert.equal(await page.locator('#clay-new').innerText(), 'New File');
+    assert.equal(await page.locator('#clay-new').count(), 0);
+    assert.equal(await page.locator('#clay-save + #clay-save-as').count(), 1);
+    assert(await page.locator('#clay-save-as').isEnabled());
+    await page.locator('#clay-save-as').click();
+    assert(await page.getByLabel('Save destinations').isVisible());
+    await page.locator('#urui-file-dialog-cancel').click();
+    const newFile = page.getByRole('button', {name: 'New file tab', exact: true});
+    assert.equal(await newFile.innerText(), '+');
+    assert(await newFile.evaluate(button =>
+      button.parentElement === button.parentElement.parentElement.lastElementChild));
     const before = await page.evaluate(() => {
       const docs = window.hcTest.runtime.documents;
       docs.editor('clay').setSource('keep this draft');
       return docs.active('clay').id;
     });
-    await page.locator('#clay-new').click();
+    const beforeControl = page.locator(`[data-document-tab="${before}"]`);
+    assert(await beforeControl.evaluate(control => control.draggable));
+    await beforeControl.dragTo(page.locator('#explorer-pane'));
+    await page.waitForFunction(() =>
+      document.querySelector('.ref-source')?.textContent === 'keep this draft');
+    assert.equal(await page.locator('.ref-source textarea, .ref-source input').count(), 0);
+    await page.evaluate(() =>
+      window.hcTest.runtime.documents.editor('clay').setSource('updated draft'));
+    await page.waitForFunction(() =>
+      document.querySelector('.ref-source')?.textContent === 'updated draft');
+    await page.evaluate(() =>
+      window.hcTest.runtime.documents.editor('clay').setSource('keep this draft'));
+    await newFile.click();
+    const after = await page.evaluate(() =>
+      window.hcTest.runtime.documents.active('clay').id);
+    const afterControl = page.locator(`[data-document-tab="${after}"]`);
+    assert(await afterControl.evaluate(control => control.draggable));
+    await afterControl.dragTo(beforeControl, {targetPosition: {x: 1, y: 1}});
+    assert.deepEqual(await page.evaluate(() =>
+      window.hcTest.runtime.documents.list('clay').map(tab => tab.id)),
+    [after, before]);
     assert.equal(await page.evaluate(() => window.hcTest.runtime.documents.active('clay').text), '');
+    await page.getByRole('button', {name: 'base', exact: true}).click();
+    await page.getByRole('button', {name: 'data', exact: true}).click();
+    await page.getByRole('button', {name: 'notes', exact: true}).click();
+    const file = page.getByRole('button', {name: 'old.txt', exact: true});
+    assert(await file.evaluate(control => control.draggable));
+    await file.dragTo(page.locator('#explorer-pane'));
+    await page.getByRole('tab', {name: 'old.txt', exact: true}).waitFor();
+    const apps = page.locator('#apps-tab');
+    const data = page.locator('#data-tab');
+    assert(await apps.evaluate(control => control.draggable));
+    assert(await data.evaluate(control => control.draggable));
+    await data.dragTo(apps, {targetPosition: {x: 1, y: 1}});
+    assert.deepEqual((await page.evaluate(() =>
+      window.hcTest.runtime.explorer.order())).slice(0, 2), ['data', 'apps']);
     await page.locator('#clay-save').click();
     const tree = page.getByLabel('Save destinations');
     const field = page.locator('#urui-file-dialog-path');
@@ -60,7 +107,7 @@ module.exports = async function checkNewFile(browser, origin) {
     assert.deepEqual(saves[0].path, ['other', 'now', 'new', 'nested', 'empty', 'txt']);
     assert.equal(saves[0].text, '');
     assert.equal(await page.evaluate(id => window.hcTest.runtime.documents.get('clay', id).text, before), 'keep this draft');
-    await page.locator('#clay-new').click();
+    await newFile.click();
     await page.evaluate(() => window.hcTest.runtime.documents.editor('clay').setSource('replacement'));
     await page.locator('#clay-save').click();
     await tree.locator('summary', {hasText: '%base /'}).click();

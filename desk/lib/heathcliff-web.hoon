@@ -54,8 +54,8 @@
               starter=''
               roots=~[[~ ~ ~ &]]
               preview=~
-              actions=~[%new %save %copy]
-              refs=|
+              actions=~[%save %save-as %copy]
+              refs=&
               share=~
           ==
       ==
@@ -88,6 +88,8 @@
       ['explorerOrder' %urui %scalar ~]
       ['docsTabs' %urui %tabs ~]
       ['nextDocs' %urui %next ~]
+      ['refTabs' %urui %tabs ~]
+      ['nextRef' %urui %next ~]
       ['clayTabs' %urui %tabs `%clay]
       ['activeClayTabId' %urui %active `%clay]
       ['nextClayTab' %urui %next `%clay]
@@ -190,7 +192,7 @@
                   source=%documents
                   kind=`%clay
                   fixed=~
-                  add=~
+                  add=`'New file tab'
                   close=&
                   reorder=&
               ==
@@ -238,7 +240,7 @@
           =type      "button"
           =title     "Download the active file at its selected revision"
           =disabled  ""
-          Download…
+          ;+  ;/  "Download…"
         ==
         ;button#hc-upload-button
           =type   "button"
@@ -601,6 +603,24 @@
       return node;
     }
 
+    function enableTabDragHandles() {
+      const selector =
+        '.explorer-tab, .docs-tab, .ref-tab, .document-tab';
+      const enable = (root) => {
+        if (!(root instanceof Element)) return;
+        if (root.matches(selector)) root.draggable = true;
+        for (const control of root.querySelectorAll(selector)) {
+          control.draggable = true;
+        }
+      };
+      enable(document.body);
+      new MutationObserver((records) => {
+        for (const record of records) {
+          for (const node of record.addedNodes) enable(node);
+        }
+      }).observe(document.body, {childList: true, subtree: true});
+    }
+
     // ---- the server ----------------------------------------------------
     async function api(op, body = {}, url = `${base}/api`) {
       const response = await fetch(url, {
@@ -850,6 +870,10 @@
         if (!tomb) openFile(wire);
       });
       button.addEventListener('keydown', menuKeys(view, button, target));
+      runtime.explorer.refs.draggable(button, () => ({
+        kind: 'attributes', parentId: JSON.stringify(wire),
+        path: [...wire], entry: 'file'
+      }));
       row.addEventListener('contextmenu', (event) => {
         setSelected(view, target);
         openMenu(view, button, event, target);
@@ -2979,6 +3003,7 @@
         }
       }
     });
+    enableTabDragHandles();
     const uploadSettings = make('fieldset', {class: 'settings-field'},
       make('legend', {class: 'settings-label', text: 'Apps uploads'}));
     const uploadChoices = new Map();
@@ -3017,7 +3042,7 @@
       event.preventDefault();
       acceptRevision();
     });
-    el('clay-new').before(el('hc-download-button'));
+    el('clay-save').before(el('hc-download-button'));
     el('hc-download-button').classList.add('store-action');
     el('hc-download-button').addEventListener('click', () => {
       const path = runtime.documents.active(store)?.path;

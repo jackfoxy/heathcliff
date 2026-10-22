@@ -267,6 +267,8 @@ await window.hcTest.openAttributes(['base','now','sample','wav'],'file');window.
   assert.deepEqual(loads.at(-1),path);
   assert.equal(await page.locator('#result-view img').count(),1);
   assert.equal(await page.evaluate(()=>Boolean(window.hcTest.runtime.documents.active('clay').readonly)),revision!=='now');
+  assert.equal(await page.locator('#clay-save-as').isDisabled(),
+    await page.locator('#clay-save').isDisabled());
   const count=await page.evaluate(()=>window.hcTest.runtime.documents.list('clay').length);
   const reload=page.waitForResponse(response=>response.url().endsWith('/files')&&response.request().postDataJSON()?.op==='load');
   await tab.dblclick();
