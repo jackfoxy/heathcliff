@@ -21,3 +21,9 @@ and permissions.
 Markdown previews accept up to 64 KiB of source; larger documents remain
 editable and show their source with a preview-limit message. Media metadata
 inspection accepts up to 64 MiB and times out after 20 seconds.
+
+The browser shares pending Markdown renders by exact source and retains the
+eight most recently used render results for the page lifetime. This avoids
+repeating ship-side parsing on file-load hooks and tab revisits. Failed renders
+are removed from the cache; edits use their new source as the cache key. The
+64 KiB UTF-8 limit is also checked before sending a render request.

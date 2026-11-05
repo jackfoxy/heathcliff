@@ -2778,11 +2778,21 @@
     const droppableRef = () => {
       return Boolean(draggedTab?.ref) && Boolean(refHooks(draggedTab.ref.kind));
     };
+    // Iframes otherwise consume native drag events before the pane sees them.
+    const clearRefDrag = () => {
+      elements.explorerPane?.classList.remove('is-ref-drop-target');
+    };
+    document.addEventListener('dragstart', () => {
+      elements.explorerPane?.classList.toggle('is-ref-drop-target',
+        droppableRef());
+    });
+    document.addEventListener('dragend', clearRefDrag);
+    document.addEventListener('drop', clearRefDrag, true);
     elements.explorerPane?.addEventListener('dragover', (event) => {
       if (!droppableRef()) return;
       event.preventDefault();
       if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
-    });
+    }, true);
     elements.explorerPane?.addEventListener('drop', (event) => {
       if (!droppableRef()) return;
       event.preventDefault();
@@ -2790,7 +2800,7 @@
       const payload = draggedTab.ref;
       draggedTab = undefined;
       openAppRef(payload);
-    });
+    }, true);
     window.addEventListener('beforeunload', saveSession);
     window.addEventListener('resize', () => {
       for (const menu of menus) menu.close();

@@ -68,9 +68,10 @@ module.exports = async function checkNewFile(browser, origin) {
       window.hcTest.runtime.documents.list('clay').map(tab => tab.id)),
     [after, before]);
     assert.equal(await page.evaluate(() => window.hcTest.runtime.documents.active('clay').text), '');
-    await page.getByRole('button', {name: 'base', exact: true}).click();
-    await page.getByRole('button', {name: 'data', exact: true}).click();
-    await page.getByRole('button', {name: 'notes', exact: true}).click();
+    await page.locator('#apps-tab').click();
+    await page.locator('#apps-tree .hc-toggle').filter({hasText: /^base$/}).click();
+    await page.locator('#apps-tree .hc-toggle').filter({hasText: /^data$/}).click();
+    await page.locator('#apps-tree .hc-toggle').filter({hasText: /^notes$/}).click();
     const file = page.getByRole('button', {name: 'old.txt', exact: true});
     assert(await file.evaluate(control => control.draggable));
     await file.dragTo(page.locator('#explorer-pane'));

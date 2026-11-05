@@ -121,15 +121,17 @@
 ::  +|  The page
 ::
 ++  page
+  |=  our=@p
   ^-  @t
-  (crip (en-xml:html (build:shell spec)))
+  (crip (en-xml:html (build:shell (spec our))))
 ::
 ++  spec
+  |=  our=@p
   ^-  shell-spec:urui
   :*  config
       brand
       toolbar
-      [reference-pane editor-pane result-pane]
+      [(reference-pane our) editor-pane result-pane]
       help
       dialogs
       styles=~['/heathcliff/app.css']
@@ -155,13 +157,15 @@
 ++  reference-pane
   ::  Exactly two permanent views; urui draws their strip and panels,
   ::  heathcliff the trees inside them.
+  |=  our=@p
   ^-  pane:urui
   :*  role=%reference
       id='explorer-pane'
       label='Heathcliff explorer'
       mode=%read-only
       kind=~
-      :~  %+  pinned  %tabs
+      :~  (pinned %ship [%label (scot %p our)])
+          %+  pinned  %tabs
           :-  %tabs
           :~  :*  name=%view
                   label='Heathcliff explorer'
@@ -369,9 +373,10 @@
   ==
 ::
 ++  javascript
+  |=  our=@p
   ^-  @t
   %+  rap  3
-  :~  (emit:ucfg spec)
+  :~  (emit:ucfg (spec our))
       core:ujs
       app-js
   ==
@@ -379,6 +384,53 @@
 ++  app-css
   ^-  @t
   '''
+  .toolbar { align-items: center; }
+  .toolbar > button {
+    align-items: center;
+    display: inline-flex;
+    height: 2.25rem;
+    justify-content: center;
+  }
+  #explorer-pane-ship {
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    font-family: ui-monospace, monospace;
+    font-size: 0.78rem;
+    height: var(--editor-header-height, 3rem);
+  }
+
+  .save-icon {
+    border: 1.5px solid currentcolor;
+    border-radius: 2px;
+    height: 0.9rem;
+    position: relative;
+    width: 0.9rem;
+  }
+
+  .save-icon::before, .save-icon::after {
+    border: 1.5px solid currentcolor;
+    content: '';
+    left: 0.16rem;
+    position: absolute;
+    width: 0.42rem;
+  }
+
+  .save-icon::before {
+    border-top: 0;
+    height: 0.23rem;
+    top: -0.02rem;
+  }
+
+  .save-icon::after {
+    bottom: 0.07rem;
+    height: 0.24rem;
+  }
+
+  #settings-modal .settings-card > .settings-field {
+    margin-top: 1rem;
+  }
+
   .hc-hidden { display: none; }
   #hc-upload-path { box-sizing: border-box; width: 100%; }
   .hc-upload-tree { max-height: 16rem; overflow: auto; margin: 0.5rem 0; }
@@ -1323,6 +1375,41 @@
     let fontFace;
     let objectUrl;
     let markdownRequest;
+    // Aborting an HTTP request does not cancel work already sent to the ship.
+    // Share in-flight renders and keep a small cache across tab switches.
+    const markdownCache = new Map();
+
+    function renderedMarkdown(text) {
+      if (new TextEncoder().encode(text).length > 65536) {
+        return Promise.reject(new Error('Markdown preview limit is 64 KiB'));
+      }
+      if (markdownCache.has(text)) {
+        const pending = markdownCache.get(text);
+        markdownCache.delete(text);
+        markdownCache.set(text, pending);
+        return pending;
+      }
+      const pending = (async () => {
+        const response = await fetch(`${base}/api`, {
+          method: 'POST', credentials: 'same-origin',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({op: 'markdown', text})
+        });
+        const answer = await response.json();
+        if (!response.ok || !answer.ok) {
+          throw new Error(answer.error?.message || 'Markdown render failed');
+        }
+        return answer.html;
+      })();
+      markdownCache.set(text, pending);
+      if (markdownCache.size > 8) {
+        markdownCache.delete(markdownCache.keys().next().value);
+      }
+      pending.catch(() => {
+        if (markdownCache.get(text) === pending) markdownCache.delete(text);
+      });
+      return pending;
+    }
     const resultFullscreen = el('hc-result-fullscreen');
 
     function cleanResult() {
@@ -1631,20 +1718,11 @@
             text = await stored.text();
             if (!live()) return;
           }
-          const response = await fetch(`${base}/api`, {
-            method: 'POST', credentials: 'same-origin',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({op: 'markdown', text}),
-            signal: controller.signal
-          });
-          const answer = await response.json();
+          const html = await renderedMarkdown(text);
           if (!live()) return;
-          if (!response.ok || !answer.ok) {
-            throw new Error(answer.error?.message || 'Markdown render failed');
-          }
           const view = make('div', {class: 'markdown-view'});
           // The server restricts the Sail tree before serializing it.
-          view.innerHTML = answer.html;
+          view.innerHTML = html;
           body.replaceChildren(view);
         } catch (cause) {
           if (!live() || controller.signal.aborted) return;
@@ -3004,6 +3082,21 @@
       }
     });
     enableTabDragHandles();
+    const saveButton = el('clay-save');
+    saveButton.classList.add('icon-button');
+    saveButton.setAttribute('aria-label', saveButton.title);
+    saveButton.replaceChildren(make('span', {
+      class: 'save-icon', 'aria-hidden': 'true'
+    }));
+    // Keep the ship label level with the source actions as they wrap.
+    const editorHeader = el('editor-pane-head');
+    const alignHeaders = () => {
+      el('workbench').style.setProperty('--editor-header-height',
+        `${editorHeader.getBoundingClientRect().height}px`);
+    };
+    alignHeaders();
+    new ResizeObserver(alignHeaders).observe(editorHeader,
+      {box: 'border-box'});
     const uploadSettings = make('fieldset', {class: 'settings-field'},
       make('legend', {class: 'settings-label', text: 'Apps uploads'}));
     const uploadChoices = new Map();
