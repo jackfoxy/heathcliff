@@ -105,7 +105,7 @@ const server=http.createServer(async(req,res)=>{
  // Compile the actual Hoon page and script, then expose test-only entry points.
 const bindings=[['urui','desk/sur/urui.hoon'],['dock','desk/sur/docket.hoon'],['uhttp','desk/lib/urui-http.hoon'],['ufiles','desk/lib/urui-files.hoon'],['hc','desk/lib/heathcliff-clay.hoon'],['ucss','desk/lib/urui-css.hoon'],['uace','desk/lib/urui-ace.hoon'],['ucfg','desk/lib/urui-config.hoon'],['ujs','desk/lib/urui-js.hoon'],['shell','desk/lib/urui-shell.hoon'],['web','desk/lib/heathcliff-web.hoon']];
  const program = assemble(bindings,
-   '[page:web css:web javascript:web ace-config-js:web]', root);
+   '[(page:web ~zod) css:web (javascript:web ~zod) ace-config-js:web]', root);
  // A regular file avoids losing vere's large result on pipe shutdown.
  const outputPath=path.join(cache,'eval-output.txt');
  const outputFile=fs.openSync(outputPath,'w');
@@ -134,6 +134,8 @@ const bindings=[['urui','desk/sur/urui.hoon'],['dock','desk/sur/docket.hoon'],['
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const browser=await chromium.launch({headless:true});
  try{
+ await require('./markdown-performance.cjs')(browser, `http://127.0.0.1:${server.address().port}`);
+ await require('./shell-ui.cjs')(browser, `http://127.0.0.1:${server.address().port}`);
  await require('./delete-tombstone.cjs')(browser, `http://127.0.0.1:${server.address().port}`);
  await require('./tree-mutations.cjs')(browser, `http://127.0.0.1:${server.address().port}`);
  await require('./new-file.cjs')(browser, `http://127.0.0.1:${server.address().port}`);
@@ -267,6 +269,8 @@ await window.hcTest.openAttributes(['base','now','sample','wav'],'file');window.
   assert.deepEqual(loads.at(-1),path);
   assert.equal(await page.locator('#result-view img').count(),1);
   assert.equal(await page.evaluate(()=>Boolean(window.hcTest.runtime.documents.active('clay').readonly)),revision!=='now');
+  assert.equal(await page.locator('#clay-save-as').isDisabled(),
+    await page.locator('#clay-save').isDisabled());
   const count=await page.evaluate(()=>window.hcTest.runtime.documents.list('clay').length);
   const reload=page.waitForResponse(response=>response.url().endsWith('/files')&&response.request().postDataJSON()?.op==='load');
   await tab.dblclick();

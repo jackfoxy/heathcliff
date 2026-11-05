@@ -47,11 +47,12 @@
 ::  +|  Assets
 ::
 ++  assets
+  |=  our=@p
   ^-  (list [suffix=@t asset=asset:uhttp])
   =/  js=@t  'text/javascript; charset=utf-8'
   =/  text=@t  'text/plain; charset=utf-8'
   %+  turn
-    :~  ['/app.js' js javascript:web]
+    :~  ['/app.js' js (javascript:web our)]
         ['/doc.toc' text docs-toc]
         ['/app.css' 'text/css; charset=utf-8' css:web]
         ['/ace/ace.js' js ace-core]
@@ -219,7 +220,7 @@
       =/  to=@t  (cat 3 '/~/login?redirect=' url.request.req)
       [(give eyre-id [[307 ['location' to]~] ~]) this]
     =/  page=asset:uhttp
-      ['text/html; charset=utf-8' (as-octs:mimes:html page:web)]
+      ['text/html; charset=utf-8' (as-octs:mimes:html (page:web our.bowl))]
     [(give eyre-id (respond:uhttp 200 page)) this]
   ?:  &(=(%'GET' method) =(~[%'favicon.png'] rest))
     [(give eyre-id (respond:uhttp 200 ['image/png' [(met 3 fav) fav]])) this]
@@ -230,7 +231,8 @@
     ?:  ?=([%raw *] rest)
       ?.  authenticated.req  [(refused eyre-id) this]
       [(give eyre-id (raw bowl t.rest args.line)) this]
-    =/  found  (asset-route:uhttp '/heathcliff' url.request.req assets)
+    =/  found
+      (asset-route:uhttp '/heathcliff' url.request.req (assets our.bowl))
     ?~  found
       [(give eyre-id [[404 ~] `(as-octs:mimes:html 'not found')]) this]
     [(give eyre-id (respond:uhttp 200 u.found)) this]

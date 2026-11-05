@@ -103,3 +103,13 @@ ffmpeg -f lavfi -i color=c=red:s=32x24:d=0.2 \
   -f lavfi -i anullsrc=r=48000:cl=stereo -shortest \
   -c:v libvpx -c:a libopus tests/fixtures/sample.webm
 ```
+
+The preview runner also runs `shell-ui.cjs`: ship/header alignment after
+resizing, Save icon accessibility, toolbar sizing, Settings spacing, and native
+reference drops over the ship label, tabs, pane body, and an HTML iframe.
+
+Markdown performance checks use the actual Users Guide source and delayed
+render replies: opening sends one render request across activation/load hooks,
+revisiting reuses cached output, stale replies never replace the active preview,
+failed requests can be retried, oversized UTF-8 source is rejected locally,
+and the eight-entry cache evicts older documents.

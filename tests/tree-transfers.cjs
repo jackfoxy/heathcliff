@@ -125,7 +125,7 @@ module.exports = async function checkTreeTransfers(browser, origin) {
   try {
     await page.goto(origin + '/heathcliff');
     await page.waitForFunction(() => window.hcTest);
-    assert.equal(await page.locator('#hc-download-button + #clay-new + #clay-save').count(), 1);
+    assert.equal(await page.locator('#hc-download-button + #clay-save').count(), 1);
     assert.equal(await page.locator('nav.toolbar #hc-download-button').count(), 0);
     assert(await page.locator('#hc-download-button').isDisabled());
 

@@ -67,3 +67,18 @@ and uses `[%md %mime]` in `heathcliff-clay` `codecs`.
 urui Hoon suites (files 32, js 15, shell 32, config 12 arms), doubles
 (13 + 7 scenarios), Chromium 65 passed, purity ok; graph-viz Chromium 18
 passed; obelisk-web lib compiles. Owner: `-test` on `%graph-viz`/`%obelisk`.
+- 2026-10-17: .pane-actions made a flex row with stretched items so the copy icon button matches the height of the text buttons
+
+## 2026-11-04: reference drop coverage
+
+Heathcliff's vendored runtime accepts reference drops in the explorer capture
+phase, including over descendant controls. During a reference drag it disables
+pointer events on explorer iframes, so documentation and HTML previews cannot
+swallow the drop. Drop and drag-end clear this temporary state. Explorer-tab
+reordering retains its existing handlers. This runtime/CSS change is local to
+Heathcliff; the sibling checkouts have not been replaced or synced.
+
+The consumer now supplies the ship to its page/spec/JavaScript gates, renders
+urui's ship label band, aligns it with the Source header via ResizeObserver,
+and uses the sibling apps' disk icon and Settings section spacing. Header
+Upload, Settings, and Help share a 2.25rem button height.

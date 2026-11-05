@@ -91,7 +91,7 @@ or a printed noun, and the result pane shows the preview. A file whose
 stored data does not match what its mark name suggests (for example an old
 `md` stored as a single cord) also opens read-only.
 
-Click New File, to the left of Save, to open an empty draft without
+Click + at the end of the file tabs to open an empty draft without
 closing your other tabs. Save opens a destination requestor: expand a desk
 and its folders to fill a partial path, then type new folders and a filename
 with its mark. For example, `base/now/notes/todo.txt`. Selecting an existing
@@ -171,7 +171,9 @@ its data is still stored; for a folder how many items it holds.
 File tabs use `name.mark` at the current revision and `name.mark version N`
 for a historical revision. Opening the same item's attributes again selects
 its existing reference tab. Different files and revisions can stay open
-side by side; the source and result panes remain usable.
+side by side; the source and result panes remain usable. Drag a file from
+either explorer tree into the reference pane to open its attributes. Drag
+reference tabs or source tabs to reorder them.
 Double-click a file's Attributes or Permissions tab to open that file in
 the source and display panes at the tab's revision.
 
@@ -338,7 +340,7 @@ marks*. The dialog lists each mark it would copy and where from.
 
 ## Downloading
 
-**Download…**, immediately left of **New File** above the source editor, saves the
+**Download…**, immediately left of **Save** above the source editor, saves the
 active file at its selected revision. It is disabled for unsaved drafts.
 The file's context menu also offers **Download…** for a single-file download.
 

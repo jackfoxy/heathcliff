@@ -459,6 +459,8 @@
 
   .store-preview[hidden] { display: none; }
 
+  .is-ref-drop-target iframe { pointer-events: none; }
+
   .store-preview iframe, .ref-explorer-panel iframe {
     background: #fff;
     border: 0;
@@ -1263,6 +1265,13 @@
   .close-icon::before { transform: rotate(45deg); }
 
   .close-icon::after { transform: rotate(-45deg); }
+
+  .pane-actions {
+    align-items: stretch;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
 
   /*  an icon action among a heading's text actions takes their height */
   .store-action.icon-button {

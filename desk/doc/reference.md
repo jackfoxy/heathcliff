@@ -19,11 +19,11 @@ the editor's key combinations. Changes require an authenticated ship session.
 | Apps tab | Browse every desk's complete file tree. |
 | Data tab | Browse each desk's `/data` tree. A sole folder named for its desk is flattened in this view. |
 | Desk/folder disclosure arrow or name | Expand or collapse its children. |
-| File name | Select the file; double-click to open it. |
+| File name | Select the file; double-click to open it. Drag it into the reference pane to open its attributes. |
 | Item … button | Open the item's context menu. Right-click, Shift+F10, or the context-menu key opens the same menu. |
 | Source file tab | Select an open document and its result preview. Drag tabs to reorder them. |
 | Source tab close (×, or ● for unsaved changes) | Close that document; confirm discarding unsaved changes when asked. |
-| Attributes/Permissions reference tab | Select that item's information at its saved revision. Double-click a file reference tab to open the file. |
+| Attributes/Permissions reference tab | Select that item's information at its saved revision. Double-click a file reference tab to open the file. Drag tabs to reorder them. |
 | Reference/documentation tab close (×) | Close the reference or documentation tab. |
 | Documentation tab | Select its help page. |
 | Pane collapse/expand arrow | Hide or restore the associated pane or band. |
@@ -34,9 +34,10 @@ the editor's key combinations. Changes require an authenticated ship session.
 
 | Control | Action |
 | --- | --- |
-| Download… | Immediately left of New File. Download the active file at its selected revision. Disabled for a draft with no saved path. Downloads committed content, not unsaved editor changes. |
-| New File | Open a new empty draft, preserving other tabs. Located to the left of Save. |
+| Download… | Immediately left of Save. Download the active file at its selected revision. Disabled for a draft with no saved path. Downloads committed content, not unsaved editor changes. |
+| + (New file tab) | Open a new empty draft, preserving other tabs. Located at the end of the file tabs. |
 | Save | Save the active editable file, including an empty draft. For drafts, browse desk trees to build a destination path, then type any new folders and `name.mark`. Saving historical text asks to create a current version. Disabled when the active file is read-only. |
+| Save As… | Choose a destination and save the active file there. Located immediately right of Save, with the same enable/disable rules. |
 | Copy | Copy the source text to the clipboard. |
 | Result tree disclosure arrow | Expand or collapse JSON/XML nodes. |
 | Download in a preview | Download the committed file when a preview offers this fallback. |
