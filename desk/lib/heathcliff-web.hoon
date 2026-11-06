@@ -3036,6 +3036,11 @@
       documents: {
         clay: {
           label: (tab) => tab.path ? fileTabLabel(tab.path) : tab.draft,
+          //  a clay delete writes a new revision without the file; the
+          //  earlier revisions still have it, so say so
+          deleteMessage: (path) => `Delete ${path.join('/')}? This ` +
+            'creates a new revision without this file. Earlier ' +
+            'revisions keep it.',
           saveDialog: () => ({
             value: '',
             browse: (select) => {
