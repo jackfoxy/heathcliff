@@ -713,15 +713,13 @@
     }
 
     // ---- the server ----------------------------------------------------
-    async function api(op, body = {}, url = `${base}/api`) {
-      const response = await fetch(url, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {'content-type': 'application/json'},
-        body: JSON.stringify({op, ...body})
-      });
-      return reply(response);
-    }
+    //
+    //  One json POST is urui's; `reply` stays because the upload paths
+    //  hand it a Response they already have, whose request body was
+    //  multipart rather than json.
+    const api = (op, body = {}, url = `${base}/api`) => {
+      return runtime.request(url, {op, ...body});
+    };
 
     async function reply(response) {
       let parsed = null;
