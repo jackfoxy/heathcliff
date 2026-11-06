@@ -29,7 +29,7 @@
           max-source=1.048.576
       ==
       slots
-      ~[['Ctrl-S' 'save:clay' %always]]
+      shortcuts
       :~  [%ready 'Ready']
           [%loading 'Loading']
           [%empty 'Nothing selected']
@@ -278,7 +278,7 @@
           Upload…
         ==
         ;+  settings-button:shell
-        ;button#help(type "button", aria-expanded "false"): Help
+        ;+  help-button:shell
       ==
   ==
 ::
@@ -354,6 +354,19 @@
         =aria-hidden  "true";
   ==
 ::
+++  shortcuts
+  ::  One chord, now carrying what it costs.  Ctrl-S is in neither the
+  ::  pinned Ace nor the Vim keymap, and urui registers `save:clay`
+  ::  from the store's name.
+  ::
+  ::  Heathcliff still leaves F1 and F2 to Ace's command palette and
+  ::  fold widget, where obelisk and graph-viz override both.  Closing
+  ::  that gap belongs to the binding pass, after the conflict gate is
+  ::  green on this table.
+  ^-  (list shortcut:urui)
+  :~  ['Ctrl-S' 'save:clay' %always %free `'Save the active file']
+  ==
+::
 ++  help
   ^-  marl
   :~  ;div#fallback-help-content
@@ -375,8 +388,9 @@
           ; Attributes…, Permissions…, Upload…, Delete and Tombstone.
         ==
         ;h3: Keyboard
+        ::  the app chords come from the table the dispatcher reads
+        ;+  (shortcut-list:shell shortcuts)
         ;ul.shortcut-list
-          ;li: Ctrl/Cmd + S: save the active file
           ;li: Shift + F10 or the context-menu key: item actions
         ==
       ==

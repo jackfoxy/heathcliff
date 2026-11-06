@@ -37,8 +37,24 @@ test('the page declares exactly the chords heathcliff binds', async ({page}) => 
   await open(page);
   const chords = await page.evaluate(() => window.urui.config.shortcuts);
   expect(chords).toEqual([
-    {binding: 'Ctrl-S', command: 'save:clay', when: 'always'}
+    {
+      binding: 'Ctrl-S',
+      command: 'save:clay',
+      when: 'always',
+      //  in neither the pinned Ace nor the Vim keymap
+      policy: 'free',
+      label: 'Save the active file'
+    }
   ]);
+});
+
+test('the chord puts its binding on the Save control', async ({page}) => {
+  await open(page);
+  //  urui badges a declared chord's control from the table, so a
+  //  rebind cannot leave a stale label behind
+  const save = page.locator('#clay-save');
+  await expect(save).toHaveAttribute('aria-keyshortcuts', 'Ctrl-S');
+  await expect(save).toHaveAttribute('title', /Ctrl-S/);
 });
 
 test('every declared chord names a store urui registers', async ({page}) => {
