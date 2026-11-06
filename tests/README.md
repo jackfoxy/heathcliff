@@ -1,8 +1,44 @@
-# Preview checks
+# Checks
 
-The browser check uses the sibling `urui` checkout's existing `vere eval`
-helpers and Playwright installation. Set `URUI_ROOT` to use another checkout,
-and `VERE` if the Urbit binary is not at `~/piers/urbit`.
+Everything here uses the sibling `urui` checkout's existing `vere eval`
+helpers and Playwright installation — this repo vendors no `node_modules`.
+Set `URUI_ROOT` to use another checkout, and `VERE` if the Urbit binary is
+not at `~/piers/urbit`.
+
+## npm entry points
+
+`package.json` names the four checks the sibling repos also name, so the
+same command works in each:
+
+```sh
+npm run test:sync          # vendored urui copies match the urui checkout
+npm run test:assets        # every vendored Ace file is imported and routed
+npm run test:browser       # tests/previews.cjs, the suite below
+npm run test:browser:real  # tests/browser/real/, the shared-shape specs
+```
+
+`test:sync` is strict: drift in a vendored urui file fails the check
+rather than warning, because a stale copy makes every check below it a
+check of the wrong sources. Run `bin/sync.sh` to take urui's version.
+
+## tests/browser/real
+
+Playwright-test specs in the shape obelisk and graph-viz use, with
+`real/serve-app.js` compiling and serving the page offline and
+`real/fixtures/backend.js` answering the file wire from inside the page.
+These specs use only `window.urui`, the frozen public facade; the suite
+below reaches further in, but only by rewriting the compiled `app.js` to
+publish its internals, which a shared-shape spec must not depend on.
+
+`app-chords.spec.js` is where the cross-app key-binding work lands. It
+reads the chord table the page declares rather than a hand-written list,
+and records on purpose that Heathcliff declares only `Ctrl-S` and leaves
+F1 and F2 to Ace, where obelisk and graph-viz override both.
+
+## Preview checks
+
+The checks below predate the npm entry points and still run directly.
+
 The ZIP-fallback checks also require `unzip` for independent CRC and content
 validation of browser-generated downloads.
 Set `HOON_EVAL_TIMEOUT_MS` above 180000 if compiling the browser assets

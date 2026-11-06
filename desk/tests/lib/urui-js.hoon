@@ -466,7 +466,7 @@
         "overwrite: Boolean(choices.overwrite)"
         "cause?.code === 'exists'"
         "cause?.code === 'changed'"
-        "confirmDialog('delete-file'"
+        "confirmDialog('delete'"
         "This cannot be undone."
     ==
   =/  tests=tang

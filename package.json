@@ -1,0 +1,11 @@
+{
+  "name": "heathcliff-browser-tests",
+  "private": true,
+  "scripts": {
+    "test:sync": "bin/verify-sync.sh --strict --quiet",
+    "test:browser": "node tests/previews.cjs",
+    "test:browser:real": "node ../urui/node_modules/@playwright/test/cli.js test --config tests/browser/real/playwright.config.js",
+    "test:assets": "node --test tests/browser/ace-assets-routed.test.js"
+  },
+  "//": "No dependencies: the browser suites borrow the sibling urui checkout's Playwright install, as tests/README.md documents. Set URUI_ROOT to use another checkout."
+}
