@@ -142,11 +142,36 @@
           '/heathcliff/app.js'
       ==
       head=~[favicon]
+      settings
   ==
 ::
 ++  favicon
   ^-  manx
   ;link(rel "icon", type "image/png", href "/heathcliff/favicon.png");
+::
+++  settings
+  ::  heathcliff's own preferences, spliced into urui's Settings modal
+  ::  after urui's.  The runtime binds the radios by id and persists the
+  ::  choice through the `preferences.appsUploadRoot` slot.
+  ^-  marl
+  :~  ;fieldset.settings-field
+        ;legend.settings-label: Apps uploads
+        ;label.preference
+          ;input#hc-apps-upload-data
+            =type   "radio"
+            =name   "hc-apps-upload-path"
+            =value  "data";
+          ;span: Apps upload to /data/
+        ==
+        ;label.preference
+          ;input#hc-apps-upload-root
+            =type   "radio"
+            =name   "hc-apps-upload-path"
+            =value  "root";
+          ;span: Apps upload to /
+        ==
+      ==
+  ==
 ::
 ++  pinned
   ::  A band the user cannot hide.
@@ -3102,28 +3127,16 @@
     alignHeaders();
     new ResizeObserver(alignHeaders).observe(editorHeader,
       {box: 'border-box'});
-    const uploadSettings = make('fieldset', {class: 'settings-field'},
-      make('legend', {class: 'settings-label', text: 'Apps uploads'}));
-    const uploadChoices = new Map();
-    for (const [value, label] of [
-      ['data', 'Apps upload to /data/'],
-      ['root', 'Apps upload to /']
-    ]) {
-      const radio = make('input', {
-        type: 'radio', name: 'hc-apps-upload-path', value,
-        id: `hc-apps-upload-${value}`
-      });
-      uploadChoices.set(value, radio);
+    //  the radios are declared in ++settings, inside urui's modal
+    const uploadChoices = new Map(['data', 'root'].map((value) => {
+      const radio = el(`hc-apps-upload-${value}`);
       radio.addEventListener('change', () => {
         if (!radio.checked) return;
         appsUploadRoot = value;
         runtime.session.queue();
       });
-      uploadSettings.append(make('label', {class: 'preference'},
-        radio, make('span', {text: label})));
-    }
-    el('settings-modal').querySelector('.settings-card')
-      .append(uploadSettings);
+      return [value, radio];
+    }));
     el('clay-copy').title = 'Copy to clipboard';
     el('clay-copy').setAttribute('aria-label', 'Copy to clipboard');
     uploadDialog = runtime.dialogs.modal(el('hc-upload'), {close: closeUpload});

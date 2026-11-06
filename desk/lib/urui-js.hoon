@@ -3042,9 +3042,10 @@
   //   fields.validate(saved, tab, ids)  app fields restored from a record
   //   activate(tab, choices)            domain reaction to a switch
   //   afterActivate(tab, choices)       the same, after render and save
-  //   label(tab)                       optional exact tab label
-  //   saveDialog(tab)                  extra options for the save path dialog
+  //   label(tab)                        optional exact tab label
+  //   saveDialog(tab)                   extra options for the save dialog
   //   beforeSave(tab, {path})           false cancels; {path, base} redirects
+  //   deleteMessage(path)               replaces the delete confirmation
   //   loaded(tab), saved(tab)           keep app data in step
   //
   // A tab whose `load` answered `readonly` is read-only like a tab from
@@ -4161,6 +4162,12 @@
     if (docPaneReadOnly(name)) return undefined;
     const tab = docCapture(name);
     if (!tab) return undefined;
+    //  a store that redirects its own saves owns the empty-draft case:
+    //  creating an empty file is a legitimate save there
+    if (!tab.path && !tab.text && !docHooks(name).beforeSave) {
+      notify(`Nothing to save in ${tab.label}.`);
+      return undefined;
+    }
     //  a tab from an app-written root saves nowhere, by any route
     if (tab.path && !docTabCanSave(name, tab)) return undefined;
     let path = tab.path;
@@ -4229,12 +4236,18 @@
   //  Tabs open on a deleted path keep their text as unsaved drafts.
   //  Confirmed batches can skip per-file prompts; quiet batches aggregate
   //  errors and refresh trees themselves, but still update successful tabs.
+  //
+  //  `deleteMessage` lets a store whose deletes mean something other than
+  //  "gone for good" say so; without it the generic warning stands.
   async function docRemove(name, path, choices = {}) {
     if (!Array.isArray(path) || docPaneReadOnly(name)) return false;
-    if (!choices.confirmed && !await confirmDialog('delete-file', {
-      message: `Delete ${pathText(path)}? This creates a new revision ` +
-        'without this file. Earlier revisions keep it.'
-    })) return false;
+    if (!choices.confirmed) {
+      const custom = docHooks(name).deleteMessage?.(path);
+      const asked = custom
+        ? await confirmDialog('delete-file', {message: custom})
+        : await confirmDialog('delete', {path: pathText(path)});
+      if (!asked) return false;
+    }
     if (!choices.quiet) docEvent(name, 'delete', 'start', path);
     try {
       await docTransport.remove(path, {});
@@ -4690,6 +4703,7 @@
       accept();
     };
     showModal(docFileModal, opening ? cancel : pathInput);
+    //  a store may replace the flat list with its own destination picker
     if (request.browse && !opening) {
       list.hidden = true;
       extra.append(request.browse((value) => {
@@ -4853,7 +4867,6 @@
   function documentsWire() {
     if (!filesConfig) return;
     const run = {
-      new: (name) => docCreate(name, {focus: true}),
       open: (name) => docOpen(name),
       save: (name) => docSave(name),
       'save-as': (name) => docSave(name, {as: true}),

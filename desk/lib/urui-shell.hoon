@@ -107,7 +107,7 @@
           ;+  (pane result.panes.spec config)
         ==
       ==
-      ;+  settings-modal
+      ;+  (settings-modal settings.spec)
       ;+  (help-panel spec)
       ;+  context-menu
       ;*  (document-dialogs config)
@@ -151,7 +151,7 @@
         ;+  (pane editor.panes.spec config)
         ;+  (pane result.panes.spec config)
       ==
-      ;+  settings-modal
+      ;+  (settings-modal settings.spec)
       ;div.app-dialogs
         ;*  dialogs.spec
       ==
@@ -653,7 +653,6 @@
   |=  =action:urui
   ^-  @t
   ?-  action
-    %new      'New File'
     %open     'Open…'
     %save     'Save'
     %save-as  'Save As…'
@@ -669,7 +668,6 @@
   ^-  tape
   =/  thing=tape  (trip noun)
   ?-  action
-    %new      "Create a new {thing} draft"
     %open     "Open a saved {thing}"
     %save     "Save this {thing}"
     %save-as  "Save this {thing} as a new file"
@@ -877,6 +875,10 @@
   ::  urui-owned preferences. The theme control lives here, at the same
   ::  `#theme` id the runtime has always bound, so moving it out of a
   ::  consumer toolbar changes markup and nothing else.
+  ::
+  ::  `extra` is the consumer's `settings` marl, spliced after urui's
+  ::  fields inside the same card.  urui neither binds nor persists it.
+  |=  extra=marl
   ^-  manx
   ;aside#settings-modal.help-panel
     =hidden           ""
@@ -923,6 +925,7 @@
               "Reference beside editor stacked over render"
         ==
       ==
+      ;*  extra
     ==
   ==
 ::
