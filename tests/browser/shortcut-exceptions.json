@@ -1,0 +1,5 @@
+{
+  "note": "Deliberate conflicts for Heathcliff's chord table. Empty: its one chord, Ctrl-S, is in neither keymap and is not browser-reserved. Heathcliff also leaves F1 and F2 to Ace, where the other apps override them.",
+  "overrides": [],
+  "reserved": []
+}
