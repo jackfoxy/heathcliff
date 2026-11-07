@@ -282,7 +282,11 @@ await window.hcTest.openAttributes(['base','now','sample','wav'],'file');window.
  await page.locator('.ref-tab[aria-selected="true"]').dblclick();
  assert.equal(loads.length,beforeTomb);
  console.log('PASS double-click opens reference files at their revision, reuses tabs, and ignores tombstones');
- assert.equal(await page.locator('#clay-copy').getAttribute('title'),'Copy to clipboard');
+ // urui appends the chord's binding to the tooltip, from the chord table
+ assert.equal(await page.locator('#clay-copy').getAttribute('title'),
+  'Copy to clipboard (Alt-C)');
+ assert.equal(await page.locator('#clay-copy').getAttribute('aria-keyshortcuts'),
+  'Alt-C');
  const fullscreen=page.locator('#hc-result-fullscreen');
  const bar=await page.locator('.hc-result-head').boundingBox();
  const icon=await fullscreen.boundingBox();

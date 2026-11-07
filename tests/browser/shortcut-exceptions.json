@@ -1,5 +1,20 @@
 {
-  "note": "Deliberate conflicts for Heathcliff's chord table. Empty: its one chord, Ctrl-S, is in neither keymap and is not browser-reserved. Heathcliff also leaves F1 and F2 to Ace, where the other apps override them.",
-  "overrides": [],
+  "note": "Deliberate conflicts for Heathcliff's chord table. The conflict gate requires an entry here for every %override row and every browser-reserved binding; an entry is the evidence that the collision was a decision rather than an oversight.",
+  "overrides": [
+    {
+      "binding": "F1",
+      "command": "help",
+      "displaces": "Ace: Open command palette",
+      "alternative": "Ctrl-, opens Ace's own settings menu, which lists its commands",
+      "reason": "F1 is Help in every app on this shell. Heathcliff left it to Ace until the binding pass; that was the one real cross-app break."
+    },
+    {
+      "binding": "F2",
+      "command": "settings",
+      "displaces": "Ace: Toggle fold widget",
+      "alternative": "Alt-F2 toggles the parent fold widget; Alt-L and Alt-0 fold and unfold",
+      "reason": "F2 is Settings in every app on this shell, and folding keeps four other bindings."
+    }
+  ],
   "reserved": []
 }

@@ -355,16 +355,24 @@
   ==
 ::
 ++  shortcuts
-  ::  One chord, now carrying what it costs.  Ctrl-S is in neither the
-  ::  pinned Ace nor the Vim keymap, and urui registers `save:clay`
-  ::  from the store's name.
+  ::  F1 and F2 now match obelisk and graph-viz: they displace Ace's
+  ::  command palette and fold widget, which stay reachable at Ctrl-,
+  ::  and Alt-F2.  Heathcliff had left both to Ace, and the divergence
+  ::  was the one real cross-app break.
   ::
-  ::  Heathcliff still leaves F1 and F2 to Ace's command palette and
-  ::  fold widget, where obelisk and graph-viz override both.  Closing
-  ::  that gap belongs to the binding pass, after the conflict gate is
-  ::  green on this table.
+  ::  F5 refreshes the tree here where it runs a query elsewhere.
+  ::  Heathcliff has nothing to run, so nothing collides, but the two
+  ::  meanings are deliberate and both docs say so.
+  ::
+  ::  No Open chord: the explorer is how a file is opened, and the
+  ::  store declares no %open action for urui to register.
   ^-  (list shortcut:urui)
-  :~  ['Ctrl-S' 'save:clay' %always %free `'Save the active file']
+  :~  ['F1' 'help' %always %override `'Help']
+      ['F2' 'settings' %always %override `'Settings']
+      ['F5' 'refresh-tree' %no-editor %free `'Refresh the file tree']
+      ['Ctrl-S' 'save:clay' %always %free `'Save the active file']
+      ['Ctrl-Shift-S' 'save-as:clay' %always %free `'Save the file as']
+      ['Alt-C' 'copy:clay' %no-editor %free `'Copy the file']
   ==
 ::
 ++  help
@@ -3179,6 +3187,11 @@
       uploadChoices.get(appsUploadRoot).checked = true;
     });
     runtime.documents.editor(store)?.onChange?.(() => queueResult());
+    //  After runtime.start, which is where urui registers its own
+    //  `refresh-tree`.  That one refreshes the trees urui draws, and
+    //  heathcliff draws its own, so registering later replaces it and
+    //  F5 reloads the desks rather than doing nothing.
+    runtime.shortcuts.register('refresh-tree', () => loadRoots());
     window.urui.boot({});
     loadRoots();
     renderResult();
