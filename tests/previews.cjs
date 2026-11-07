@@ -532,7 +532,13 @@ const body=document.querySelector('#result-view');body.replaceChildren();await w
  docsEnabled=true;
  await page.locator('#help').click();
  await page.waitForFunction(()=>!document.getElementById('docs-help-content').hidden);
- const topics=[['keyboard-shortcuts','Keyboard Shortcuts'],['users-guide','Users Guide'],['reference','Reference'],['about','About Heathcliff and Ace editor']];
+ // the three after Keyboard Shortcuts are urui's, synced into every
+ // app's doc tree: the Ace reference, the dialog contract and the
+ // key policy
+ const topics=[['keyboard-shortcuts','Keyboard Shortcuts'],
+  ['ace-keys','Ace Editor Keys'],['modal-keys','Dialog Keys'],
+  ['key-policy','Key Policy'],['users-guide','Users Guide'],
+  ['reference','Reference'],['about','About Heathcliff and Ace editor']];
  assert.deepEqual(await page.locator('#docs-help-nav a').allTextContents(),topics.map(([,title])=>title));
  for(const [slug,title] of topics){
   if(!(await page.locator('#docs-help-content').isVisible()))await page.locator('#help').click();
