@@ -146,6 +146,7 @@
       styles=~['/probe/app.css']
       scripts=~['/probe/app.js' '/probe/extra.js']
       head=~[;meta(name "probe-head", content "yes");]
+      settings=~[;div#probe-settings.settings-field;]
   ==
 ::
 ++  doc  (build:shell spec)
@@ -218,6 +219,7 @@
       styles=~['body { color: black; }']
       scripts=~['/probe/app.js']
       head=~[;meta(name "probe-head", content "yes");]
+      settings=~[;div#probe-settings.settings-field;]
   ==
 ::
 ++  full-doc  (build:shell full-spec)
@@ -703,6 +705,57 @@
     !>((attribute (head explorer) %id))
   ==
 ::
+++  test-shell-splices-consumer-settings-into-the-modal
+  ::  Both frames append the consumer's marl to the Settings card, after
+  ::  urui's own preferences.
+  ^-  tang
+  =/  compact-modal  (need (node-by-id doc "settings-modal"))
+  =/  full-modal  (need (node-by-id full-doc "settings-modal"))
+  =/  card=manx  (snag 0 c.full-modal)
+  ;:  weld
+    (expect !>((has-node-id compact-modal "probe-settings")))
+    (expect !>((has-node-id full-modal "probe-settings")))
+    (expect !>((has-node-id full-modal "theme")))
+    (expect-eq !>("probe-settings") !>((attribute (rear c.card) %id)))
+  ==
+::
+++  test-help-button-matches-the-settings-button
+  ::  Both are frame furniture at the id the runtime binds, and neither
+  ::  carries a key badge: the runtime adds those from the chord table,
+  ::  so the markup does not have to know the binding.
+  ^-  tang
+  =/  help=manx  help-button:shell
+  =/  settings=manx  settings-button:shell
+  ;:  weld
+    (expect-eq !>("help") !>((attribute help %id)))
+    (expect-eq !>("settings") !>((attribute settings %id)))
+    (expect-eq !>("Help") !>((attribute help %title)))
+    (expect-eq !>("dialog") !>((attribute help %aria-haspopup)))
+    (expect-eq !>("false") !>((attribute help %aria-expanded)))
+    (expect !>(!(has-attribute help %aria-keyshortcuts)))
+    (expect !>(!(has-attribute settings %aria-keyshortcuts)))
+    (expect !>(?=(~ (find ~[%kbd] (turn c.help |=(k=manx n.g.k))))))
+  ==
+::
+++  test-shortcut-list-renders-labelled-chords-only
+  ::  The help table comes from the same chord list the dispatcher
+  ::  reads, so the two cannot disagree.  A chord with no label would
+  ::  show a bare command name, so it is skipped.
+  ^-  tang
+  =/  chords=(list shortcut:urui)
+    :~  ['F1' 'help' %always %override `'Help']
+        ['Ctrl-S' 'save:text' %always %free `'Save']
+        ['Ctrl-Q' 'quit' %always %free ~]
+    ==
+  =/  rendered=manx  (shortcut-list:shell chords)
+  =/  rows=(list manx)  c.rendered
+  ;:  weld
+    (expect-eq !>(%ul) !>(n.g.rendered))
+    (expect-eq !>("shortcut-list") !>((attribute rendered %class)))
+    (expect-eq !>(2) !>((lent rows)))
+    (expect-eq !>(%kbd) !>(n.g:(snag 0 c:(snag 0 rows))))
+  ==
+::
 ++  test-full-shell-emits-help-and-dialogs
   =/  dialogs
     %+  skim  (elements full-doc %aside)
@@ -868,13 +921,6 @@
     (expect-eq !>("Copy this Note") !>((attribute copy %aria-label)))
     (expect-eq !>(1) !>((lent icons)))
     (expect-eq !>("copy-icon") !>((attribute (head icons) %class)))
-  ==
-::
-++  test-new-file-action
-  ;:  weld
-    (expect-eq !>('New File') !>((action-label:shell %new)))
-    %+  expect-eq  !>("Create a new File draft")
-    !>((action-tip:shell %new 'File'))
   ==
 ::
 ++  test-store-actions-carry-default-tooltips

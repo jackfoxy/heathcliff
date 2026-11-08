@@ -282,7 +282,11 @@ await window.hcTest.openAttributes(['base','now','sample','wav'],'file');window.
  await page.locator('.ref-tab[aria-selected="true"]').dblclick();
  assert.equal(loads.length,beforeTomb);
  console.log('PASS double-click opens reference files at their revision, reuses tabs, and ignores tombstones');
- assert.equal(await page.locator('#clay-copy').getAttribute('title'),'Copy to clipboard');
+ // urui appends the chord's binding to the tooltip, from the chord table
+ assert.equal(await page.locator('#clay-copy').getAttribute('title'),
+  'Copy to clipboard (Alt-C)');
+ assert.equal(await page.locator('#clay-copy').getAttribute('aria-keyshortcuts'),
+  'Alt-C');
  const fullscreen=page.locator('#hc-result-fullscreen');
  const bar=await page.locator('.hc-result-head').boundingBox();
  const icon=await fullscreen.boundingBox();
@@ -528,7 +532,13 @@ const body=document.querySelector('#result-view');body.replaceChildren();await w
  docsEnabled=true;
  await page.locator('#help').click();
  await page.waitForFunction(()=>!document.getElementById('docs-help-content').hidden);
- const topics=[['keyboard-shortcuts','Keyboard Shortcuts'],['users-guide','Users Guide'],['reference','Reference'],['about','About Heathcliff and Ace editor']];
+ // the three after Keyboard Shortcuts are urui's, synced into every
+ // app's doc tree: the Ace reference, the dialog contract and the
+ // key policy
+ const topics=[['keyboard-shortcuts','Keyboard Shortcuts'],
+  ['ace-keys','Ace Editor Keys'],['modal-keys','Dialog Keys'],
+  ['key-policy','Key Policy'],['users-guide','Users Guide'],
+  ['reference','Reference'],['about','About Heathcliff and Ace editor']];
  assert.deepEqual(await page.locator('#docs-help-nav a').allTextContents(),topics.map(([,title])=>title));
  for(const [slug,title] of topics){
   if(!(await page.locator('#docs-help-content').isVisible()))await page.locator('#help').click();

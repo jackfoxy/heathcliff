@@ -29,7 +29,7 @@
           max-source=1.048.576
       ==
       slots
-      ~[['Ctrl-S' 'save:clay' %always]]
+      shortcuts
       :~  [%ready 'Ready']
           [%loading 'Loading']
           [%empty 'Nothing selected']
@@ -142,11 +142,36 @@
           '/heathcliff/app.js'
       ==
       head=~[favicon]
+      settings
   ==
 ::
 ++  favicon
   ^-  manx
   ;link(rel "icon", type "image/png", href "/heathcliff/favicon.png");
+::
+++  settings
+  ::  heathcliff's own preferences, spliced into urui's Settings modal
+  ::  after urui's.  The runtime binds the radios by id and persists the
+  ::  choice through the `preferences.appsUploadRoot` slot.
+  ^-  marl
+  :~  ;fieldset.settings-field
+        ;legend.settings-label: Apps uploads
+        ;label.preference
+          ;input#hc-apps-upload-data
+            =type   "radio"
+            =name   "hc-apps-upload-path"
+            =value  "data";
+          ;span: Apps upload to /data/
+        ==
+        ;label.preference
+          ;input#hc-apps-upload-root
+            =type   "radio"
+            =name   "hc-apps-upload-path"
+            =value  "root";
+          ;span: Apps upload to /
+        ==
+      ==
+  ==
 ::
 ++  pinned
   ::  A band the user cannot hide.
@@ -253,7 +278,7 @@
           Upload…
         ==
         ;+  settings-button:shell
-        ;button#help(type "button", aria-expanded "false"): Help
+        ;+  help-button:shell
       ==
   ==
 ::
@@ -329,6 +354,27 @@
         =aria-hidden  "true";
   ==
 ::
+++  shortcuts
+  ::  F1 and F2 now match obelisk and graph-viz: they displace Ace's
+  ::  command palette and fold widget, which stay reachable at Ctrl-,
+  ::  and Alt-F2.  Heathcliff had left both to Ace, and the divergence
+  ::  was the one real cross-app break.
+  ::
+  ::  F5 refreshes the tree here where it runs a query elsewhere.
+  ::  Heathcliff has nothing to run, so nothing collides, but the two
+  ::  meanings are deliberate and both docs say so.
+  ::
+  ::  No Open chord: the explorer is how a file is opened, and the
+  ::  store declares no %open action for urui to register.
+  ^-  (list shortcut:urui)
+  :~  ['F1' 'help' %always %override `'Help']
+      ['F2' 'settings' %always %override `'Settings']
+      ['F5' 'refresh-tree' %no-editor %free `'Refresh the file tree']
+      ['Ctrl-S' 'save:clay' %always %free `'Save the active file']
+      ['Ctrl-Shift-S' 'save-as:clay' %always %free `'Save the file as']
+      ['Alt-C' 'copy:clay' %no-editor %free `'Copy the file']
+  ==
+::
 ++  help
   ^-  marl
   :~  ;div#fallback-help-content
@@ -350,8 +396,9 @@
           ; Attributes…, Permissions…, Upload…, Delete and Tombstone.
         ==
         ;h3: Keyboard
+        ::  the app chords come from the table the dispatcher reads
+        ;+  (shortcut-list:shell shortcuts)
         ;ul.shortcut-list
-          ;li: Ctrl/Cmd + S: save the active file
           ;li: Shift + F10 or the context-menu key: item actions
         ==
       ==
@@ -674,15 +721,13 @@
     }
 
     // ---- the server ----------------------------------------------------
-    async function api(op, body = {}, url = `${base}/api`) {
-      const response = await fetch(url, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {'content-type': 'application/json'},
-        body: JSON.stringify({op, ...body})
-      });
-      return reply(response);
-    }
+    //
+    //  One json POST is urui's; `reply` stays because the upload paths
+    //  hand it a Response they already have, whose request body was
+    //  multipart rather than json.
+    const api = (op, body = {}, url = `${base}/api`) => {
+      return runtime.request(url, {op, ...body});
+    };
 
     async function reply(response) {
       let parsed = null;
@@ -3036,6 +3081,11 @@
       documents: {
         clay: {
           label: (tab) => tab.path ? fileTabLabel(tab.path) : tab.draft,
+          //  a clay delete writes a new revision without the file; the
+          //  earlier revisions still have it, so say so
+          deleteMessage: (path) => `Delete ${path.join('/')}? This ` +
+            'creates a new revision without this file. Earlier ' +
+            'revisions keep it.',
           saveDialog: () => ({
             value: '',
             browse: (select) => {
@@ -3097,28 +3147,16 @@
     alignHeaders();
     new ResizeObserver(alignHeaders).observe(editorHeader,
       {box: 'border-box'});
-    const uploadSettings = make('fieldset', {class: 'settings-field'},
-      make('legend', {class: 'settings-label', text: 'Apps uploads'}));
-    const uploadChoices = new Map();
-    for (const [value, label] of [
-      ['data', 'Apps upload to /data/'],
-      ['root', 'Apps upload to /']
-    ]) {
-      const radio = make('input', {
-        type: 'radio', name: 'hc-apps-upload-path', value,
-        id: `hc-apps-upload-${value}`
-      });
-      uploadChoices.set(value, radio);
+    //  the radios are declared in ++settings, inside urui's modal
+    const uploadChoices = new Map(['data', 'root'].map((value) => {
+      const radio = el(`hc-apps-upload-${value}`);
       radio.addEventListener('change', () => {
         if (!radio.checked) return;
         appsUploadRoot = value;
         runtime.session.queue();
       });
-      uploadSettings.append(make('label', {class: 'preference'},
-        radio, make('span', {text: label})));
-    }
-    el('settings-modal').querySelector('.settings-card')
-      .append(uploadSettings);
+      return [value, radio];
+    }));
     el('clay-copy').title = 'Copy to clipboard';
     el('clay-copy').setAttribute('aria-label', 'Copy to clipboard');
     uploadDialog = runtime.dialogs.modal(el('hc-upload'), {close: closeUpload});
@@ -3149,6 +3187,11 @@
       uploadChoices.get(appsUploadRoot).checked = true;
     });
     runtime.documents.editor(store)?.onChange?.(() => queueResult());
+    //  After runtime.start, which is where urui registers its own
+    //  `refresh-tree`.  That one refreshes the trees urui draws, and
+    //  heathcliff draws its own, so registering later replaces it and
+    //  F5 reloads the desks rather than doing nothing.
+    runtime.shortcuts.register('refresh-tree', () => loadRoots());
     window.urui.boot({});
     loadRoots();
     renderResult();
